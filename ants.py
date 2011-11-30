@@ -6,12 +6,27 @@ import time
 from collections import defaultdict
 from math import sqrt
 
+import logging
+
+logging.basicConfig(level=logging.DEBUG,
+                    format='%(asctime)s %(name)-12s %(levelname)-8s %(message)s',
+                    datefmt='%m-%d %H:%M',
+                    filename='/tmp/MyBot.log',
+                    filemode='w')
+#console = logging.StreamHandler()
+#console.setLevel(logging.DEBUG)
+#formatter = logging.Formatter('%(name)-12s: %(levelname)-8s %(message)s')
+#console.setFormatter(formatter)
+#logging.getLogger('').addHandler(console)
+
+
 MY_ANT = 0
 ANTS = 0
 DEAD = -1
 LAND = -2
 FOOD = -3
 WATER = -4
+UNKNOWN = -5
 
 PLAYER_ANT = 'abcdefghij'
 HILL_ANT = string = 'ABCDEFGHIJ'
@@ -79,7 +94,7 @@ class Ants():
                     self.spawnradius2 = int(tokens[1])
                 elif key == 'turns':
                     self.turns = int(tokens[1])
-        self.map = [[LAND for col in range(self.cols)]
+        self.map = [[UNKNOWN for col in range(self.cols)]
                     for row in range(self.rows)]
 
     def update(self, data):
@@ -191,6 +206,11 @@ class Ants():
         d_col = min(abs(col1 - col2), self.cols - abs(col1 - col2))
         d_row = min(abs(row1 - row2), self.rows - abs(row1 - row2))
         return d_row + d_col
+        
+    def m_distance(self, loc1, loc2):
+        row1, col1 = loc1
+        row2, col2 = loc2
+        return abs(row1-row2) + abs(col1-col2)
 
     def direction(self, loc1, loc2):
         'determine the 1 or 2 fastest (closest) directions to reach a location'
@@ -220,6 +240,119 @@ class Ants():
             if col1 - col2 <= width2:
                 d.append('w')
         return d
+    
+    def neighbors(self, loc):
+        n = []
+        directions = ['n', 's', 'e', 'w']
+        for direction in directions:
+            d = self.destination(loc, direction)
+            if self.passable(d):
+                n.append(d)
+        return n    
+    
+    
+    def a_star_direction(self, start, end):
+        # TODO - We should cache this or something for speed.
+        closed_set = []
+        open_set = [start]
+        came_from = {}
+        
+        g_score = {}
+        h_score = {}
+        f_score = {}        # f = g + h    
+        
+        g = 0
+        h = self.m_distance(start, end)
+        f = g + h    
+        g_score[start] = g
+        h_score[start] = h
+        f_score[start] = f
+
+        def reconstruct_path(from_list, node):
+            if node in from_list:
+                path = reconstruct_path(from_list, from_list[node])
+                path.append(node)
+                return path
+            else:
+                #logging.info("Adding: " + str(node))
+                return [node]
+        
+        while open_set:
+            # Get the item from open set with the smallest f-score
+            x = open_set[0]
+            for i in open_set:
+                if f_score[i] < f_score[x]:
+                    x = i
+                    
+            if x == end:
+                path = reconstruct_path(came_from, end)
+                if(path[0]==start):
+                    return self.direction(start, path[1])
+                else:
+                    logging.info("SOMETHING WENT WRONG WITH A*")
+                    return []
+                    
+            open_set.remove(x)
+            closed_set.append(x)
+            
+            for neighbor in self.neighbors(x):
+                if neighbor in closed_set:
+                    continue
+                
+                tentative_is_better = False
+                tentative_g_score = g_score[x] + 1
+                
+                if neighbor not in open_set:
+                    open_set.append(neighbor)
+                    tentative_is_better = True
+                elif tentative_g_score < g_score[neighbor]:
+                    tentative_is_better = True
+                else:
+                    tentative_is_better = False
+                    
+                if tentative_is_better == True:
+                    came_from[neighbor] = x
+                    g_score[neighbor] = tentative_g_score
+                    h = self.m_distance(neighbor, end)
+                    h_score[neighbor] = h
+                    f_score[neighbor] = tentative_g_score + h
+                    
+                    
+        #logging.info("------")
+        logging.info("THIS IS BAD, SHOULD NEVER HAPPEN!")
+        #logging.info("START: " + str(start))
+        #logging.info("END: " + str(end))
+        #logging.info("------")
+        return []            
+        
+        
+    def closest_unknown(self, loc, exclude=None):
+        if exclude==None:
+            exclude = [] 
+        mindist = sys.maxint
+        closest = None
+        for row in xrange(self.rows):
+            for col in xrange(self.cols):
+                if self.map[row][col] == UNKNOWN and (row, col) not in exclude:
+                    d = self.distance(loc, (row, col))
+                    if d < mindist:
+                        mindist = d
+                        closest = (row, col)
+        #logging.info("Closest: ")
+        return closest
+        
+    def closest_food(self, loc, exclude=None):
+        if exclude==None:
+            exclude = [] 
+        mindist = sys.maxint
+        closest = None
+        for row in xrange(self.rows):
+            for col in xrange(self.cols):
+                if self.map[row][col] == FOOD:
+                        mindist = d
+                        closest = (row, col)
+        #logging.info("Closest: ")
+        return closest    
 
     def visible(self, loc):
         ' determine which squares are visible to the given player '
