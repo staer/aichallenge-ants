@@ -267,7 +267,7 @@ class Ants():
     
     
     def find_path(self, start, end):
-        if self.current_paths > 6:
+        if self.current_paths > 10:
             logging.info("Calculated too many paths, skipping the rest for the turn")
             return []    
         """ Finds a path from start to end using the A* algorithm, WATER tiles is considered the only barrier. """
