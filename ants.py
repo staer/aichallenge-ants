@@ -73,6 +73,7 @@ class Ants():
         self.spawnradius = 0
         
         self.current_paths = 0
+        self.ant_locations = []
 
     def setup(self, data):
         'parse initial input and setup starting game state'
@@ -107,6 +108,8 @@ class Ants():
 
     def update(self, data):
         self.current_paths = 0
+        self.ant_locations = [] # This is a list of all the locations we are trying to move our ants to.
+        
         'parse engine input and update the game state'
         # start timer
         self.turn_start_time = time.time()
@@ -161,6 +164,9 @@ class Ants():
     def issue_order(self, order):
         'issue an order by writing the proper ant location and direction'
         (row, col), direction = order
+        new_loc = self.destination((row, col), direction)
+        self.ant_locations.append(new_loc) # Save the location we are issueing the order to so we don't move another ant there.
+        
         sys.stdout.write('o %s %s %s\n' % (row, col, direction))
         sys.stdout.flush()
         
@@ -195,7 +201,8 @@ class Ants():
     def passable(self, loc):
         'true if not water'
         row, col = loc
-        return self.map[row][col] != WATER
+        
+        return self.map[row][col] != WATER and (row, col) not in self.ant_locations
     
     def unoccupied(self, loc):
         'true if no ants are at the location'
