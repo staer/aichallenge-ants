@@ -73,6 +73,7 @@ class Ants():
         self.spawnradius = 0
         
         self.current_paths = 0
+        self.ant_locations = []
 
     def setup(self, data):
         'parse initial input and setup starting game state'
@@ -107,6 +108,7 @@ class Ants():
 
     def update(self, data):
         self.current_paths = 0
+        
         
         'parse engine input and update the game state'
         # start timer
@@ -156,12 +158,22 @@ class Ants():
                             owner = int(tokens[3])
                             self.hill_list[(row, col)] = owner
                         
+        self.ant_locations = self.my_ants()
+    
     def time_remaining(self):
         return self.turntime - int(1000 * (time.time() - self.turn_start_time))
     
     def issue_order(self, order):
         'issue an order by writing the proper ant location and direction'
         (row, col), direction = order
+        
+        #
+        # Keep track of where we currently have ants, and where we are moving them
+        # This allwows us to disallow movement into squares with ants (thus avoiding bot suicide)!
+        src = (row, col)
+        dest = self.destination(src, direction)
+        self.ant_locations.remove(src)    # Remove where we were
+        self.ant_locations.append(dest)    # Add where we're going!
         
         sys.stdout.write('o %s %s %s\n' % (row, col, direction))
         sys.stdout.flush()
@@ -194,13 +206,13 @@ class Ants():
         'return a list of all food locations'
         return self.food_list[:]
 
-    def passable(self, loc, future_ant_locations=None):
-        if future_ant_locations == None:
-            future_ant_locations = []
-        'true if not water'
+    def passable(self, loc):
         row, col = loc
+                    
+        if (row, col) in self.ant_locations:
+            return False
         
-        return self.map[row][col] != WATER and (row, col) not in future_ant_locations
+        return self.map[row][col] != WATER
     
     def unoccupied(self, loc):
         'true if no ants are at the location'
@@ -371,8 +383,11 @@ class Ants():
                         closest = (row, col)
         return closest
         
-    def nearby_location(self, loc, radius=5):
+    def nearby_location(self, loc, radius=None):
         """ Find a nearby non-water location """
+        if radius==None:
+            radius = int(self.viewradius)
+            
         locations = []
         for r in xrange(-radius, radius):
             for c in xrange(-radius, radius):
@@ -387,7 +402,7 @@ class Ants():
                 if col > self.cols-1:
                     col -= self.cols
                 
-                if self.map[row][col] != WATER and self.map[row][col] != UNKNOWN:
+                if self.map[row][col] != WATER and self.map[row][col] != UNKNOWN and (row, col) != loc:
                     locations.append((row,col))
                     
         # Send back a random item from the set we just created

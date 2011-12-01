@@ -18,8 +18,10 @@ TRAVEL = 2
 PATROL = 3
 
 ORDERS = {
+    'NOTHING': -1,
     'FOOD': 1,
     'EXPLORE': 2,
+    'PATROL': 3,
 }
 
 # define a class with a do_turn method
@@ -29,7 +31,7 @@ class MyBot:
     def __init__(self):
         # define class level variables, will be remembered between turns
         self.standing_orders = {}
-        self.future_ant_locations = []
+        
     # do_setup is run once at the start of the game
     # after the bot has received the game settings
     # the ants class is created and setup by the Ants.run method
@@ -47,16 +49,13 @@ class MyBot:
         
         # Get the direction to move to get there
         directions = ants.direction(ant, dest)
-        ant_moved = False
         while directions:
             direction = directions[0]
             directions.remove(direction)
             new_loc = ants.destination(ant, direction)
-            if ants.passable(new_loc, self.future_ant_locations):
+            if ants.passable(new_loc):
                 ants.issue_order((ant, direction))
-                ant_moved = True
                 self.standing_orders[new_loc] = current_orders[ant]                        
-                self.future_ant_locations.append(new_loc)
                 return True
                 
         return False    #Coudln't move the ant
@@ -70,7 +69,6 @@ class MyBot:
         logging.info("Starting turn " + str(turn_number))
         
         
-        self.future_ant_locations = []
         current_orders = {}     # Current orders to execute this turn
         food_list = ants.food() # All the available food
         available_food = ants.food()    # Food that isn't being targetted
@@ -81,8 +79,6 @@ class MyBot:
                 # It is possible that we ate the food so it's no longer there
                 available_food.remove(self.standing_orders[ant]['target'])
         
-
-
         ants_with_orders = self.standing_orders.keys()
         
         for ant in ants.my_ants():
@@ -105,6 +101,9 @@ class MyBot:
                 # For now we jsut make the ant search out food (or sit still if it can't find any, i guess)
                 current_order = ORDERS['FOOD']
 
+                ###############
+                # ORDER: FOOD #
+                ###############
                 if current_order == ORDERS['FOOD']:
                     nearby_food = ants.nearby_food(ant, available_food)  
                     
@@ -119,26 +118,63 @@ class MyBot:
                         }
                     # No food was found, either from a bad path or just no food in range
                     else:
+                        # If we can't find food, patrol instead
+                        current_order = ORDERS['PATROL']
                         if nearby_food:
                             logging.info("Coudln't find a valid path to any of the food")
                         else:
                             logging.info("No nearby food!")
-        
+                
+                #################
+                # ORDER: PATROL #
+                #################
+                if current_order == ORDERS['PATROL']:
+                    nearby_location = ants.nearby_location(ant)
+                    path = ants.find_path(ant, nearby_location)
+                    if path:
+                        current_orders[ant] = {
+                            'order': ORDERS['PATROL'],
+                            'target': nearby_location,
+                            'path': path,
+                            'duration': len(path) + int(0.3*len(path))
+                        }
+                    else:
+                        current_orders[ant] = {
+                            'order': ORDERS['NOTHING']
+                        }
+                        logging.info("Coudln't find a valid path to the nearby location!")
+                
+        logging.info("Ants: " + str(len(ants.my_ants())))
+        logging.info("Orders: " + str(len(current_orders)))
         ################################
         # Execute the "current" orders #
         ################################
         self.standing_orders = {}
+        logging.info("STARTING EXECUTION")
         for ant in current_orders.keys():
             current_order = current_orders[ant]['order']
             
+            #################
+            # EXECUTE: FOOD #
+            #################
             if current_order == ORDERS['FOOD']:  
-                ant_moved = self.move_along_path(ants, ant, current_orders)      
-                if not ant_moved:
-                    logging.info("Ant at " + str(ant) + " appears to be stuck!")
-                    self.future_ant_locations.append(ant)        
+                ant_moved = self.move_along_path(ants, ant, current_orders)
+                if ant_moved == False:
+                    logging.info("Food ant at " + str(ant) + " appears to be stuck!")
+                    
+                    
+                    
+            ###################
+            # EXECUTE: PATROL #
+            ###################
+            elif current_order == ORDERS['PATROL']:
+                ant_moved = self.move_along_path(ants, ant, current_orders)
+                if ant_moved == False:
+                    logging.info("Patrol ant at " + str(ant) + " appears to be stuck!")
+                           
             else:
                 logging.info("Ant at " + str(ant) + " has an unknown order: " + str(current_order))
-                                    
+        logging.info("DONE EXECUTION")                            
         
         # Calculate some turn statistics
         stats = {}
