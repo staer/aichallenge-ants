@@ -46,6 +46,7 @@ class MyBot:
         logging.info("Starting turn " + str(turn_number))
         
         
+        future_ant_locations = []
         current_orders = {}     # Current orders to execute this turn
         food_list = ants.food() # All the available food
         available_food = ants.food()    # Food that isn't being targetted
@@ -55,8 +56,6 @@ class MyBot:
             if self.standing_orders[ant]['order'] == ORDERS['FOOD'] and self.standing_orders[ant]['target'] in available_food:
                 # It is possible that we ate the food so it's no longer there
                 available_food.remove(self.standing_orders[ant]['target'])
-        logging.info("Of " + str(len(food_list)) + " visible food, " + str(len(available_food)) + " are NOT being targetted.")
-                
         
         ants_with_orders = self.standing_orders.keys()
         
@@ -117,14 +116,18 @@ class MyBot:
                     direction = directions[0]
                     directions.remove(direction)
                     new_loc = ants.destination(ant, direction)
-                    if ants.passable(new_loc):
+                    if ants.passable(new_loc, future_ant_locations):
                         ants.issue_order((ant, direction))
                         ant_moved = True
-                        self.standing_orders[new_loc] = current_orders[ant]
+                        self.standing_orders[new_loc] = current_orders[ant]                        
+                        # Save the new location
+                        future_ant_locations.append(new_loc)
                         break
                 if not ant_moved:
-                    self.standing_orders[ant] = current_orders[ant]
                     logging.info("Ant at " + str(ant) + " appears to be stuck!")
+                    future_ant_locations.append(ant)
+                    self.standing_orders[ant] = current_orders[ant]
+                    
             else:
                 logging.info("Ant at " + str(ant) + " has no order!")
                                     
@@ -142,6 +145,7 @@ class MyBot:
                 
         for stat in stats.keys():
             logging.info(str(stat) + ": " + str(stats[stat]))
+        logging.info("Of " + str(len(food_list)) + " known food, " + str(len(available_food)) + " are NOT being gathered.")
         
         logging.info("Finishing turn " + str(turn_number))
         logging.info("-------------")
