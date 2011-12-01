@@ -119,11 +119,33 @@ class MyBot:
                     # No food was found, either from a bad path or just no food in range
                     else:
                         # If we can't find food, patrol instead
-                        current_order = ORDERS['PATROL']
+                        current_order = ORDERS['EXPLORE']
                         if nearby_food:
                             logging.info("Coudln't find a valid path to any of the food")
                         else:
                             logging.info("No nearby food!")
+                
+                ##################
+                # ORDER: EXPLORE #
+                ##################
+                if current_order == ORDERS['EXPLORE']:
+                    nearby_unknowns = ants.nearby_unknowns(ant)
+                    
+                    dest, path = ants.find_first_path(ant, nearby_unknowns)
+                    if dest:
+                        logging.info("YAY, Found an exploration path!")
+                        current_orders[ant] = {
+                            'order': ORDERS['PATROL'],
+                            'target': dest,
+                            'path': path,
+                            'duration': len(path) + int(0.3 * len(path))
+                        }
+                        
+                    else:
+                        current_order = ORDERS['PATROL']
+                        logging.info("OH NOES. Nothing to explore!")
+                    
+                    
                 
                 #################
                 # ORDER: PATROL #
@@ -143,6 +165,8 @@ class MyBot:
                             'order': ORDERS['NOTHING']
                         }
                         logging.info("Coudln't find a valid path to the nearby location!")
+                        
+
                 
         logging.info("Ants: " + str(len(ants.my_ants())))
         logging.info("Orders: " + str(len(current_orders)))
@@ -160,9 +184,7 @@ class MyBot:
             if current_order == ORDERS['FOOD']:  
                 ant_moved = self.move_along_path(ants, ant, current_orders)
                 if ant_moved == False:
-                    logging.info("Food ant at " + str(ant) + " appears to be stuck!")
-                    
-                    
+                    logging.info("Food ant at " + str(ant) + " appears to be stuck!")                    
                     
             ###################
             # EXECUTE: PATROL #
@@ -171,7 +193,14 @@ class MyBot:
                 ant_moved = self.move_along_path(ants, ant, current_orders)
                 if ant_moved == False:
                     logging.info("Patrol ant at " + str(ant) + " appears to be stuck!")
-                           
+                    
+            ####################
+            # EXECUTE: EXPLORE #
+            ####################
+            elif current_order == ORDERS['EXPLORE']:
+                ant_moved = self.move_along_path(ants, ant, current_orders)
+                if ant_moved == False:
+                    logging.info("Explore ant at " + str(ant) + " appears to be stuck!")
             else:
                 logging.info("Ant at " + str(ant) + " has an unknown order: " + str(current_order))
         logging.info("DONE EXECUTION")                            
