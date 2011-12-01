@@ -126,7 +126,8 @@ class MyBot:
                 if not ant_moved:
                     logging.info("Ant at " + str(ant) + " appears to be stuck!")
                     future_ant_locations.append(ant)
-                    self.standing_orders[ant] = current_orders[ant]
+                    # don't update the standing orders for a stuck any, just give them
+                    # new orders
                     
             else:
                 logging.info("Ant at " + str(ant) + " has no order!")
