@@ -29,7 +29,7 @@ class MyBot:
     def __init__(self):
         # define class level variables, will be remembered between turns
         self.standing_orders = {}
-    
+        self.future_ant_locations = []
     # do_setup is run once at the start of the game
     # after the bot has received the game settings
     # the ants class is created and setup by the Ants.run method
@@ -37,6 +37,30 @@ class MyBot:
         # initialize data structures after learning the game settings
         pass
     
+    def move_along_path(self, ants, ant, current_orders):
+        """ Issue an order to move ant, along path"""
+        
+        path = current_orders[ant]['path']
+        index = path.index(ant) # Get the current location in the path
+        #logging.info("Ant at " + str(ant) + " going to " + str(current_orders[ant]['target']))
+        dest = path[index+1]    # Get the "next step"
+        
+        # Get the direction to move to get there
+        directions = ants.direction(ant, dest)
+        ant_moved = False
+        while directions:
+            direction = directions[0]
+            directions.remove(direction)
+            new_loc = ants.destination(ant, direction)
+            if ants.passable(new_loc, self.future_ant_locations):
+                ants.issue_order((ant, direction))
+                ant_moved = True
+                self.standing_orders[new_loc] = current_orders[ant]                        
+                self.future_ant_locations.append(new_loc)
+                return True
+                
+        return False    #Coudln't move the ant
+        
     # do turn is run once per turn
     # the ants class has the game state and is updated by the Ants.run method
     # it also has several helper methods to use
@@ -46,7 +70,7 @@ class MyBot:
         logging.info("Starting turn " + str(turn_number))
         
         
-        future_ant_locations = []
+        self.future_ant_locations = []
         current_orders = {}     # Current orders to execute this turn
         food_list = ants.food() # All the available food
         available_food = ants.food()    # Food that isn't being targetted
@@ -57,30 +81,32 @@ class MyBot:
                 # It is possible that we ate the food so it's no longer there
                 available_food.remove(self.standing_orders[ant]['target'])
         
+
+
         ants_with_orders = self.standing_orders.keys()
         
         for ant in ants.my_ants():
             needs_order = True
-            # Does the ant already have a standing order? If so go ahead and do that
+            
+            #########################################
+            # Process Ants That Already Have Orders #
+            #########################################
             if ant in ants_with_orders:
                 needs_order = False
                 current_orders[ant] = self.standing_orders[ant]
-                current_orders[ant]['duration'] = current_orders[ant]['duration'] - 1
-                
+                current_orders[ant]['duration'] = current_orders[ant]['duration'] - 1                
+
                 # If we have reached the target (or timed out?)
-                if current_orders[ant]['target'] == ant or current_orders[ant]['duration']<0:
+                if current_orders[ant]['target'] == ant or current_orders[ant]['duration'] < 0:
                     needs_order = True
                     del current_orders[ant]
 
-            if needs_order:
-                # TODO - Give the ant an order!
-                
+            if needs_order:                
                 # For now we jsut make the ant search out food (or sit still if it can't find any, i guess)
                 current_order = ORDERS['FOOD']
 
                 if current_order == ORDERS['FOOD']:
                     nearby_food = ants.nearby_food(ant, available_food)  
-                    logging.info("Food near " + str(ant) + " = " + str(nearby_food))
                     
                     food, path = ants.find_first_path(ant, nearby_food)
                     if food:
@@ -91,46 +117,27 @@ class MyBot:
                             'path': path,
                             'duration': len(path) + int(0.3*len(path)),
                         }
+                    # No food was found, either from a bad path or just no food in range
                     else:
                         if nearby_food:
                             logging.info("Coudln't find a valid path to any of the food")
                         else:
                             logging.info("No nearby food!")
         
-        # Execute the "current" orders
+        ################################
+        # Execute the "current" orders #
+        ################################
         self.standing_orders = {}
         for ant in current_orders.keys():
             current_order = current_orders[ant]['order']
             
-            if current_order == ORDERS['FOOD']:
-                # Issue an order to the next step on the path
-                # This should be factored out
-                path = current_orders[ant]['path']
-                index = path.index(ant) # Get the current location in the path
-                logging.info("Ant at " + str(ant) + " going to " + str(current_orders[ant]['target']))
-                dest = path[index+1]    # Get the "next step"
-                # Get the direction to move to get there
-                directions = ants.direction(ant, dest)
-                ant_moved = False
-                while directions:
-                    direction = directions[0]
-                    directions.remove(direction)
-                    new_loc = ants.destination(ant, direction)
-                    if ants.passable(new_loc, future_ant_locations):
-                        ants.issue_order((ant, direction))
-                        ant_moved = True
-                        self.standing_orders[new_loc] = current_orders[ant]                        
-                        # Save the new location
-                        future_ant_locations.append(new_loc)
-                        break
+            if current_order == ORDERS['FOOD']:  
+                ant_moved = self.move_along_path(ants, ant, current_orders)      
                 if not ant_moved:
                     logging.info("Ant at " + str(ant) + " appears to be stuck!")
-                    future_ant_locations.append(ant)
-                    # don't update the standing orders for a stuck any, just give them
-                    # new orders
-                    
+                    self.future_ant_locations.append(ant)        
             else:
-                logging.info("Ant at " + str(ant) + " has no order!")
+                logging.info("Ant at " + str(ant) + " has an unknown order: " + str(current_order))
                                     
         
         # Calculate some turn statistics

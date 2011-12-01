@@ -263,8 +263,7 @@ class Ants():
             d = self.destination(loc, direction)
             if self.passable(d):
                 n.append(d)
-        return n    
-    
+        return n     
     
     def find_path(self, start, end):
         if self.current_paths > 10:
