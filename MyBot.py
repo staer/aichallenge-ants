@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 from ants import *
 from random import choice, shuffle
+import time
 
 import logging
 
@@ -9,11 +10,17 @@ logging.basicConfig(level=logging.DEBUG,
                     datefmt='%m-%d %H:%M',
                     filename='/tmp/MyBot.log',
                     filemode='w')
-#console = logging.StreamHandler()
-#console.setLevel(logging.DEBUG)
-#formatter = logging.Formatter('%(name)-12s: %(levelname)-8s %(message)s')
-#console.setFormatter(formatter)
-#logging.getLogger('').addHandler(console)
+
+turn_number = 0
+
+EXPLORE = 1
+TRAVEL = 2
+PATROL = 3
+
+ORDERS = {
+    'FOOD': 1,
+    'EXPLORE': 2,
+}
 
 # define a class with a do_turn method
 # the Ants.run method will parse and update bot input
@@ -21,7 +28,7 @@ logging.basicConfig(level=logging.DEBUG,
 class MyBot:
     def __init__(self):
         # define class level variables, will be remembered between turns
-        pass
+        self.standing_orders = {}
     
     # do_setup is run once at the start of the game
     # after the bot has received the game settings
@@ -34,81 +41,112 @@ class MyBot:
     # the ants class has the game state and is updated by the Ants.run method
     # it also has several helper methods to use
     def do_turn(self, ants):
-        logging.info("Starting turn...")
-        # loop through all my ants and try to give them orders
-        # the ant_loc is an ant location tuple in (row, col) form
+        global turn_number
+        turn_number = turn_number + 1
+        logging.info("Starting turn " + str(turn_number))
         
-        future_ants = []
-        unknown_targets = []
-        food_targets = []
-        find_closest = True
-        for index, ant_loc in enumerate(ants.my_ants()):
-            if ants.time_remaining() < 0.3 * ants.turntime:
-                logging.info("BREAKING")
-                logging.info("TIME REMAINING: " + str(ants.time_remaining()))
-                return
+        
+        current_orders = {}     # Current orders to execute this turn
+        food_list = ants.food() # All the available food
+        available_food = ants.food()    # Food that isn't being targetted
+        
+        
+        for ant in self.standing_orders.keys():
+            if self.standing_orders[ant]['order'] == ORDERS['FOOD'] and self.standing_orders[ant]['target'] in available_food:
+                # It is possible that we ate the food so it's no longer there
+                available_food.remove(self.standing_orders[ant]['target'])
+        logging.info("Of " + str(len(food_list)) + " visible food, " + str(len(available_food)) + " are NOT being targetted.")
                 
-            if ants.time_remaining() < 0.4 * ants.turntime:
-                logging.info("Running low on time!")
-                logging.info("TIME REMAINING: " + str(ants.time_remaining()))
-                find_closest = False
+        
+        ants_with_orders = self.standing_orders.keys()
+        
+        for ant in ants.my_ants():
+            needs_order = True
+            # Does the ant already have a standing order? If so go ahead and do that
+            if ant in ants_with_orders:
+                needs_order = False
+                current_orders[ant] = self.standing_orders[ant]
+                current_orders[ant]['duration'] = current_orders[ant]['duration'] - 1
                 
-                #break
-            directions = ['n', 'e', 's', 'w']
-            shuffle(directions)
-            
-            closest_unknown = None
-            if find_closest:
-                # Each ant should move to the nearest unknown location to map it that another ant isn't moving to
-                closest_unknown = ants.closest_unknown(ant_loc, unknown_targets)
-                while closest_unknown and closest_unknown in unknown_targets:
-                    closest_unknown = ants.closest_unknown(ant_loc, unknown_targets)
-            
-            
-            # For now the first 25 ants are "explorers", the rest are random fools
-            # This is to avoid timeout until we have some type of memory for each ant of what 
-            # their order is!
-            if closest_unknown:
-                ds = ants.a_star_direction(ant_loc, closest_unknown)
-                directions = ds + directions
-            elif find_closest and ants.time_remaining() < 0.4 * ants.turntime:
-                logging.info("No unknowns, finding food instead!")
-                closest_food = ants.closest_food(ant_loc, food_targets)
-                while closest_food and closest_food in food_targets:
-                    closest_food = ants.closest_food(ant_loc, food_targets)
-                    
-                if closest_food:
-                    ds = ants.a_star_direction(ant_loc, closest_food)
-                    directions = ds + directions
-                else:
-                    logging.info("NO FOOD!")
+                # If we have reached the target (or timed out?)
+                if current_orders[ant]['target'] == ant or current_orders[ant]['duration']<0:
+                    needs_order = True
+                    del current_orders[ant]
 
+            if needs_order:
+                # TODO - Give the ant an order!
                 
-            # try all directions in RANDOM order
-            order_issued = False
-            while directions:
-                direction = directions[0]
-                del directions[0]
-                
-                # Try to move the ant in the random direction, but only if it isn't
-                # water or one of our own ants.
-                new_loc = ants.destination(ant_loc, direction)
-                if ants.passable(new_loc) and not new_loc in future_ants:
-                    ants.issue_order((ant_loc, direction))
-                    # Save the new location in the future_ants so we can avoid collisions
-                    future_ants.append(new_loc)  
-                    order_issued = True
-                    break
+                # For now we jsut make the ant search out food (or sit still if it can't find any, i guess)
+                current_order = ORDERS['FOOD']
+
+                if current_order == ORDERS['FOOD']:
+                    nearby_food = ants.nearby_food(ant, available_food)  
+                    logging.info("Food near " + str(ant) + " = " + str(nearby_food))
                     
-                    
-            if order_issued:
-                pass
-                #logging.info("Order given!")
+                    food, path = ants.find_first_path(ant, nearby_food)
+                    if food:
+                        available_food.remove(food)
+                        current_orders[ant] = {
+                            'order': ORDERS['FOOD'],
+                            'target': food,
+                            'path': path,
+                            'duration': len(path) + int(0.3*len(path)),
+                        }
+                    else:
+                        if nearby_food:
+                            logging.info("Coudln't find a valid path to any of the food")
+                        else:
+                            logging.info("No nearby food!")
+        
+        # Execute the "current" orders
+        self.standing_orders = {}
+        for ant in current_orders.keys():
+            current_order = current_orders[ant]['order']
+            
+            if current_order == ORDERS['FOOD']:
+                # Issue an order to the next step on the path
+                # This should be factored out
+                path = current_orders[ant]['path']
+                index = path.index(ant) # Get the current location in the path
+                logging.info("Ant at " + str(ant) + " going to " + str(current_orders[ant]['target']))
+                dest = path[index+1]    # Get the "next step"
+                # Get the direction to move to get there
+                directions = ants.direction(ant, dest)
+                ant_moved = False
+                while directions:
+                    direction = directions[0]
+                    directions.remove(direction)
+                    new_loc = ants.destination(ant, direction)
+                    if ants.passable(new_loc):
+                        ants.issue_order((ant, direction))
+                        ant_moved = True
+                        self.standing_orders[new_loc] = current_orders[ant]
+                        break
+                if not ant_moved:
+                    self.standing_orders[ant] = current_orders[ant]
+                    logging.info("Ant at " + str(ant) + " appears to be stuck!")
             else:
-                logging.info("Ant stuck!")
-            # check if we still have time left to calculate more orders
-            if ants.time_remaining() < 10:
-                break
+                logging.info("Ant at " + str(ant) + " has no order!")
+                                    
+        
+        # Calculate some turn statistics
+        stats = {}
+        stats['TOTAL_ANTS'] = len(ants.my_ants())
+        stats['TOTAL_FOOD'] = len(ants.food())
+        stats['ENEMY_HILLS'] = len(ants.enemy_hills())
+        for ant_loc in self.standing_orders.keys():
+            if self.standing_orders[ant_loc]['order'] not in stats:
+                stats[self.standing_orders[ant_loc]['order']] = 1
+            else:
+                stats[self.standing_orders[ant_loc]['order']]+=1
+                
+        for stat in stats.keys():
+            logging.info(str(stat) + ": " + str(stats[stat]))
+        
+        logging.info("Finishing turn " + str(turn_number))
+        logging.info("-------------")
+        # End turn!            
+        return    
             
 if __name__ == '__main__':
     # psyco will speed up python a little, but is not needed

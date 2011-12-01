@@ -68,6 +68,11 @@ class Ants():
         self.attackradius2 = 0
         self.spawnradius2 = 0
         self.turns = 0
+        self.viewradius = 0
+        self.attackradius = 0
+        self.spawnradius = 0
+        
+        self.current_paths = 0
 
     def setup(self, data):
         'parse initial input and setup starting game state'
@@ -88,16 +93,20 @@ class Ants():
                     self.loadtime = int(tokens[1])
                 elif key == 'viewradius2':
                     self.viewradius2 = int(tokens[1])
+                    self.viewradius = sqrt(self.viewradius2)
                 elif key == 'attackradius2':
                     self.attackradius2 = int(tokens[1])
+                    self.attackradius = sqrt(self.attackradius2)
                 elif key == 'spawnradius2':
                     self.spawnradius2 = int(tokens[1])
+                    self.spwanradius = sqrt(self.spawnradius2)
                 elif key == 'turns':
                     self.turns = int(tokens[1])
         self.map = [[UNKNOWN for col in range(self.cols)]
                     for row in range(self.rows)]
 
     def update(self, data):
+        self.current_paths = 0
         'parse engine input and update the game state'
         # start timer
         self.turn_start_time = time.time()
@@ -200,17 +209,18 @@ class Ants():
         return ((row + d_row) % self.rows, (col + d_col) % self.cols)        
 
     def distance(self, loc1, loc2):
-        'calculate the closest distance between to locations'
+        'calculate the manhatten closest distance between to locations'
         row1, col1 = loc1
         row2, col2 = loc2
         d_col = min(abs(col1 - col2), self.cols - abs(col1 - col2))
         d_row = min(abs(row1 - row2), self.rows - abs(row1 - row2))
         return d_row + d_col
-        
-    def m_distance(self, loc1, loc2):
-        row1, col1 = loc1
-        row2, col2 = loc2
-        return abs(row1-row2) + abs(col1-col2)
+    
+    def real_distance(self, loc1, loc2):
+        dr = min(abs(loc1[0]-loc2[0]), self.rows - abs(loc1[0]-loc2[0]))
+        dc = min(abs(loc1[1]-loc2[1]), self.cols - abs(loc1[1]-loc2[1]))
+        d = sqrt(dr**2 + dc**2)
+        return d
 
     def direction(self, loc1, loc2):
         'determine the 1 or 2 fastest (closest) directions to reach a location'
@@ -251,8 +261,11 @@ class Ants():
         return n    
     
     
-    def a_star_direction(self, start, end):
-        # TODO - We should cache this or something for speed.
+    def find_path(self, start, end):
+        if self.current_paths > 6:
+            logging.info("Calculated too many paths, skipping the rest for the turn")
+            return []    
+        """ Finds a path from start to end using the A* algorithm, WATER tiles is considered the only barrier. """
         closed_set = []
         open_set = [start]
         came_from = {}
@@ -262,22 +275,28 @@ class Ants():
         f_score = {}        # f = g + h    
         
         g = 0
-        h = self.m_distance(start, end)
+        h = self.distance(start, end)
         f = g + h    
         g_score[start] = g
         h_score[start] = h
         f_score[start] = f
+        
+        iterations = 0
 
         def reconstruct_path(from_list, node):
+            """ Reconstructions a path from node, return a list of map coordinates (row, col) to take to get to node """
             if node in from_list:
                 path = reconstruct_path(from_list, from_list[node])
                 path.append(node)
                 return path
             else:
-                #logging.info("Adding: " + str(node))
                 return [node]
         
         while open_set:
+            iterations = iterations + 1
+            if iterations > self.viewradius2:
+                self.current_paths = self.current_paths + 1 # Increment timed-out calculations
+                return []
             # Get the item from open set with the smallest f-score
             x = open_set[0]
             for i in open_set:
@@ -285,12 +304,9 @@ class Ants():
                     x = i
                     
             if x == end:
+                self.current_paths = self.current_paths + 1 # Increment sucessful calculations
                 path = reconstruct_path(came_from, end)
-                if(path[0]==start):
-                    return self.direction(start, path[1])
-                else:
-                    logging.info("SOMETHING WENT WRONG WITH A*")
-                    return []
+                return path
                     
             open_set.remove(x)
             closed_set.append(x)
@@ -300,6 +316,7 @@ class Ants():
                     continue
                 
                 tentative_is_better = False
+                    
                 tentative_g_score = g_score[x] + 1
                 
                 if neighbor not in open_set:
@@ -313,24 +330,34 @@ class Ants():
                 if tentative_is_better == True:
                     came_from[neighbor] = x
                     g_score[neighbor] = tentative_g_score
-                    h = self.m_distance(neighbor, end)
+                    h = self.distance(neighbor, end)
                     h_score[neighbor] = h
                     f_score[neighbor] = tentative_g_score + h
                     
                     
-        #logging.info("------")
+        # No path!?
         logging.info("THIS IS BAD, SHOULD NEVER HAPPEN!")
-        #logging.info("START: " + str(start))
-        #logging.info("END: " + str(end))
-        #logging.info("------")
         return []            
+
+    def find_first_path(self, location, destinations):
+        random.shuffle(destinations)    # Add some randomness to our lives!
+        path = None
+        dest = None
+        for d in destinations:
+            path = self.find_path(location, d)
+            if path:
+                return (d, path)
         
-        
+        return (None, None)
+
     def closest_unknown(self, loc, exclude=None):
+        lr, lc = loc
+
         if exclude==None:
             exclude = [] 
         mindist = sys.maxint
         closest = None
+
         for row in xrange(self.rows):
             for col in xrange(self.cols):
                 if self.map[row][col] == UNKNOWN and (row, col) not in exclude:
@@ -338,9 +365,93 @@ class Ants():
                     if d < mindist:
                         mindist = d
                         closest = (row, col)
-        #logging.info("Closest: ")
         return closest
         
+    def nearby_location(self, loc, radius=5):
+        """ Find a nearby non-water location """
+        locations = []
+        for r in xrange(-radius, radius):
+            for c in xrange(-radius, radius):
+                row = loc[0] + r
+                col = loc[1] + c
+                if row < 0:
+                    row += self.rows
+                if col < 0:
+                    col += self.cols
+                if row > self.rows-1:
+                    row -= self.rows
+                if col > self.cols-1:
+                    col -= self.cols
+                
+                if self.map[row][col] != WATER and self.map[row][col] != UNKNOWN:
+                    locations.append((row,col))
+                    
+        # Send back a random item from the set we just created
+        return random.choice(locations)
+        
+    def nearby_unknown(self, loc, exclude=None):
+        lr, lc = loc
+                
+        if exclude==None:
+            exclude = [] 
+        mindist = sys.maxint
+        closest = None
+
+        #for row in xrange(self.rows):
+        #    for col in xrange(self.cols):
+        unknowns = []
+        for r in xrange(-5,5):
+            for c in xrange(-5,5):
+                row = lr + r
+                col = lc +c
+                if row < 0:
+                    row += self.rows
+                if col < 0:
+                    col += self.cols
+                if row > self.rows-1:
+                    row -= self.rows
+                if col > self.cols-1:
+                    col -= self.cols
+                    
+                #logging.info("Start: " + str(loc))
+                #logging.info("Row: " + str(row))
+                #logging.info("Col: " + str(col))    
+                    
+                if self.map[row][col] == UNKNOWN and (row, col) not in exclude:
+                    unknowns.append((row,col))
+                    #d = self.distance(loc, (row, col))
+                    #if d < mindist:
+                    #    mindist = d
+                    #    closest = (row, col)
+        if unknowns:
+            u = random.choice(unknowns)
+            logging.info("Found random starting at: " + str(loc) + " to " + str(u))
+            return u
+        else:
+            return None
+        # return closest
+            
+    def random_nearby(self, loc, radius=10):
+        """ Returns a random valid location radius'ish, units away."""
+        while True:
+            r_offset = random.randint(-1 * radius//2, radius//2)
+            c_offset = random.randint(-1 * radius//2, radius//2)
+            row = loc[0] + r_offset
+            col = loc[0] + c_offset
+            
+            if row < 0:
+                row += self.rows
+            if col < 0:
+                col += self.cols
+            if row > self.rows-1:
+                row -= self.rows
+            if col > self.cols-1:
+                col -= self.cols
+                
+            if self.map[row][col]!=WATER:
+                return (row,col)
+                     
+    
     def closest_food(self, loc, exclude=None):
         if exclude==None:
             exclude = [] 
@@ -352,7 +463,16 @@ class Ants():
                         mindist = d
                         closest = (row, col)
         #logging.info("Closest: ")
-        return closest    
+        return closest   
+        
+    def nearby_food(self, location, food_list):
+        results = []
+        for food_loc in food_list:
+            dist = self.real_distance(location, food_loc)
+            if dist < self.viewradius:
+                results.append(food_loc)
+        return results
+         
 
     def visible(self, loc):
         ' determine which squares are visible to the given player '
@@ -407,7 +527,15 @@ class Ants():
                 elif current_line.lower() == 'go':
                     ants.update(map_data)
                     # call the do_turn method of the class passed in
-                    bot.do_turn(ants)
+                    try:
+                        bot.do_turn(ants)
+                    except:
+                        logging.info("OMG CAUGHT AN EXCEPTION")
+                        import traceback
+                        formatted_lines = traceback.format_exc()
+                        logging.info(str(formatted_lines))
+                    
+                    
                     ants.finish_turn()
                     map_data = ''
                 else:
