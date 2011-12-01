@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 from ants import *
-from random import choice, shuffle
+import random
 import time
 
 import logging
@@ -12,10 +12,6 @@ logging.basicConfig(level=logging.DEBUG,
                     filemode='w')
 
 turn_number = 0
-
-EXPLORE = 1
-TRAVEL = 2
-PATROL = 3
 
 ORDERS = {
     'NOTHING': -1,
@@ -93,7 +89,11 @@ class MyBot:
                 current_orders[ant]['duration'] = current_orders[ant]['duration'] - 1                
 
                 # If we have reached the target (or timed out?)
-                if current_orders[ant]['target'] == ant or current_orders[ant]['duration'] < 0:
+                target = current_orders[ant]['target']
+                if target == ant or current_orders[ant]['duration'] < 0 or ants.path_has_water(current_orders[ant]['path']):
+                    if ants.map[target[0]][target[1]] == -4:
+                        logging.info("THE TARGET WAS WATER!")
+                    
                     needs_order = True
                     del current_orders[ant]
 
@@ -201,6 +201,22 @@ class MyBot:
                 ant_moved = self.move_along_path(ants, ant, current_orders)
                 if ant_moved == False:
                     logging.info("Explore ant at " + str(ant) + " appears to be stuck!")
+            
+            ####################
+            # EXECUTE: NOTHING #
+            ####################
+            elif current_order == ORDERS['NOTHING']:
+                directions = ['n','s','e','w']
+                random.shuffle(directions)
+                while directions:
+                    direction = directions[0]
+                    directions.remove(direction)
+                    new_loc = ants.destination(ant, direction)
+                    if ants.passable(new_loc):
+                        ants.issue_order((ant, direction))
+                        break
+                    
+                    
             else:
                 logging.info("Ant at " + str(ant) + " has an unknown order: " + str(current_order))
         logging.info("DONE EXECUTION")                            

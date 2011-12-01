@@ -172,7 +172,8 @@ class Ants():
         # This allwows us to disallow movement into squares with ants (thus avoiding bot suicide)!
         src = (row, col)
         dest = self.destination(src, direction)
-        self.ant_locations.remove(src)    # Remove where we were
+        if src in self.ant_locations:
+            self.ant_locations.remove(src)    # Remove where we were
         self.ant_locations.append(dest)    # Add where we're going!
         
         sys.stdout.write('o %s %s %s\n' % (row, col, direction))
@@ -182,6 +183,12 @@ class Ants():
         'finish the turn by writing the go line'
         sys.stdout.write('go\n')
         sys.stdout.flush()
+    
+    def path_has_water(self, path):
+        for loc in path:
+            if self.map[loc[0]][loc[1]] == WATER:
+                return True
+        return False
     
     def my_hills(self):
         return [loc for loc, owner in self.hill_list.items()
@@ -278,7 +285,7 @@ class Ants():
         return n     
     
     def find_path(self, start, end):
-        if self.current_paths > 20:
+        if self.current_paths > 100:
             logging.info("Calculated too many paths, skipping the rest for the turn")
             return []    
         """ Finds a path from start to end using the A* algorithm, WATER tiles is considered the only barrier. """
