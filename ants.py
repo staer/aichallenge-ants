@@ -278,7 +278,7 @@ class Ants():
         return n     
     
     def find_path(self, start, end):
-        if self.current_paths > 10:
+        if self.current_paths > 20:
             logging.info("Calculated too many paths, skipping the rest for the turn")
             return []    
         """ Finds a path from start to end using the A* algorithm, WATER tiles is considered the only barrier. """
@@ -408,6 +408,29 @@ class Ants():
         # Send back a random item from the set we just created
         return random.choice(locations)
         
+    def nearby_unknowns(self, loc, radius=None):
+        if radius==None:
+            radius = int(self.viewradius)*2
+            
+        locations = []
+        for r in xrange(-radius, radius):
+            for c in xrange(-radius, radius):
+                row = loc[0] + r
+                col = loc[1] + c
+                if row < 0:
+                    row += self.rows
+                if col < 0:
+                    col += self.cols
+                if row > self.rows-1:
+                    row -= self.rows
+                if col > self.cols-1:
+                    col -= self.cols
+                    
+                if self.map[row][col] == UNKNOWN:
+                    locations.append((row, col))
+        random.shuffle(locations)
+        return locations[:5]
+        
     def nearby_unknown(self, loc, exclude=None):
         lr, lc = loc
                 
@@ -490,7 +513,9 @@ class Ants():
             dist = self.real_distance(location, food_loc)
             if dist < self.viewradius:
                 results.append(food_loc)
-        return results
+                
+        random.shuffle(results)
+        return results[:5]
          
 
     def visible(self, loc):
