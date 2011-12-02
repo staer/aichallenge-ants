@@ -237,7 +237,7 @@ class Ants():
                 elif (row, col) in self.my_hills():
                     output += "H".rjust(5)
                 else:
-                    output += str(self.diffusion_map[row][col]).rjust(4) + " "
+                    output += str(self.diffusion_map[row][col]).rjust(5) + " "
             logging.info(output)
 
     
