@@ -74,7 +74,10 @@ class Ants():
         
         self.current_paths = 0
         self.ant_locations = []
-
+        self.path_cache = {}        # Dict of {((row, col),(row, col)): [(row,col),(row,col), etc]} i.e. {((start),(end)):[path]}
+        
+        self.diffusion_map = None
+        
     def setup(self, data):
         'parse initial input and setup starting game state'
         for line in data.split('\n'):
@@ -104,6 +107,9 @@ class Ants():
                 elif key == 'turns':
                     self.turns = int(tokens[1])
         self.map = [[UNKNOWN for col in range(self.cols)]
+                    for row in range(self.rows)]
+                    
+        self.diffusion_map = [[0 for col in range(self.cols)]
                     for row in range(self.rows)]
 
     def update(self, data):
@@ -159,6 +165,79 @@ class Ants():
                             self.hill_list[(row, col)] = owner
                         
         self.ant_locations = self.my_ants()
+        
+    def initialize_diffusion_map(self):
+        for row in xrange(self.rows):
+            for col in xrange(self.cols):
+                # Set the initial values
+                #self.diffusion_map[row][col] = 0
+                
+                #if (row, col) in [loc for loc, owner in self.enemy_hills()]:
+                #    self.diffusion_map[row][col] += 20000
+                # Now set up our stuff we know about (food for now!)
+                if self.map[row][col] == FOOD:
+                    self.diffusion_map[row][col] = 10000
+                if self.map[row][col] == UNKNOWN:
+                    self.diffusion_map[row][col] = 5000
+                if self.map[row][col] == WATER:
+                    self.diffusion_map[row][col] = 0    # Don't diffuse food!  
+        
+        #logging.info("INITIAL MAP")
+        #self.print_diffusion_map()              
+    
+    def diffuse_map(self, diffusionSteps=2, diffusionCoef = 0.4):
+        for step in xrange(diffusionSteps):
+            
+            newMap = [[{} for col in range(self.cols)]
+                for row in range(self.rows)]
+                
+            for row in xrange(self.rows):
+                for col in xrange(self.cols):
+                    val = 0
+                    if self.map[row][col]!=WATER:
+                        up_loc = self.destination((row,col), 'n')
+                        left_loc = self.destination((row,col), 'w')
+                        right_loc = self.destination((row,col), 'e')
+                        down_loc = self.destination((row,col), 's')
+                    
+                        val_up = self.diffusion_map[up_loc[0]][up_loc[1]]
+                        val_left = self.diffusion_map[left_loc[0]][left_loc[1]]
+                        val_right = self.diffusion_map[right_loc[0]][right_loc[1]]
+                        val_down = self.diffusion_map[down_loc[0]][down_loc[1]]
+                        
+                        val_own = self.diffusion_map[row][col]
+                        val = val_own + (diffusionCoef * ((val_up+val_down+val_left+val_right) - (4 * val_own)))
+                    
+                    if val < 0:
+                        val = 0
+                    newMap[row][col] = int(val)
+            
+            self.diffusion_map = newMap
+            #if step==diffusionSteps-1:
+                #logging.info("FINAL MAP")
+                #self.print_diffusion_map()
+
+    def print_diffusion_map(self):
+        logging.info("HILLS: " + str(self.enemy_hills()))
+        for row in xrange(self.rows):
+            output = ""
+            for col in xrange(self.cols):
+                if (row, col) in self.my_ants():
+                    output += "X".rjust(4) + " "
+                elif self.map[row][col]==WATER:
+                    output += "W".rjust(4) + " "
+                #elif self.map[row][col]==UNKNOWN:
+                #    output += "U".rjust(4) + " "
+                elif (row, col) in self.food():
+                    output += "F".rjust(4) + " "
+                elif (row, col) in [loc for loc, owner in self.enemy_hills()]:
+                    output += "T".rjust(4) + " "
+                elif (row, col) in self.my_hills():
+                    output += "H".rjust(4) + " "
+                else:
+                    output += str(self.diffusion_map[row][col]).rjust(4) + " "
+            logging.info(output)
+
     
     def time_remaining(self):
         return self.turntime - int(1000 * (time.time() - self.turn_start_time))
@@ -172,6 +251,7 @@ class Ants():
         # This allwows us to disallow movement into squares with ants (thus avoiding bot suicide)!
         src = (row, col)
         dest = self.destination(src, direction)
+        self.diffusion_map[row][col] = int(0.9 * self.diffusion_map[row][col])
         if src in self.ant_locations:
             self.ant_locations.remove(src)    # Remove where we were
         self.ant_locations.append(dest)    # Add where we're going!
@@ -189,6 +269,14 @@ class Ants():
             if self.map[loc[0]][loc[1]] == WATER:
                 return True
         return False
+        
+    def unknown(self):
+        output = []
+        for row in xrange(self.rows):
+            for col in xrange(self.cols):
+                if self.map[row][col] == UNKNOWN:
+                    output.append((row,col))
+        return output
     
     def my_hills(self):
         return [loc for loc, owner in self.hill_list.items()
@@ -284,7 +372,13 @@ class Ants():
                 n.append(d)
         return n     
     
-    def find_path(self, start, end):
+    def find_path(self, start, end, cache=False):
+        
+        # Check the cache for a path we already know
+        if (start, end) in self.path_cache:
+            logging.info("Yay found a cached path!")
+            return self.path_cache[(start, end)]
+        
         if self.current_paths > 100:
             logging.info("Calculated too many paths, skipping the rest for the turn")
             return []    
@@ -329,6 +423,8 @@ class Ants():
             if x == end:
                 self.current_paths = self.current_paths + 1 # Increment sucessful calculations
                 path = reconstruct_path(came_from, end)
+                if cache:
+                    self.path_cache[(start,end)] = path
                 return path
                     
             open_set.remove(x)
