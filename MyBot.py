@@ -18,6 +18,7 @@ ORDERS = {
     'FOOD': 1,
     'EXPLORE': 2,
     'PATROL': 3,
+    'SIEGE': 4,     # Attack an enemy hill
 }
 
 # define a class with a do_turn method
@@ -102,6 +103,11 @@ class MyBot:
                 # For now we jsut make the ant search out food (or sit still if it can't find any, i guess)
                 current_order = ORDERS['FOOD']
 
+                # We should really just get a list of all ants near any hill, then be more specific later?
+                nearby_enemy_hills = ants.nearby_enemy_hills(ant)
+                if len(nearby_enemy_hills) > 0:
+                    current_order=ORDERS['SIEGE']
+
                 ###############
                 # ORDER: FOOD #
                 ###############
@@ -145,9 +151,23 @@ class MyBot:
                     else:
                         current_order = ORDERS['PATROL']
                         logging.info("OH NOES. Nothing to explore!")
-                    
-                    
+                        
                 
+                ################
+                # ORDER: SIEGE #
+                ################
+                if current_order == ORDERS['SIEGE']:
+                    # nearby_enemy_hills calculated above
+                    dest, path = ants.find_first_path(ant, nearby_enemy_hills)
+                    if dest:
+                        logging.info("Enemy hill in sight!")
+                        current_orders[ant] = {
+                            'order': ORDERS['SIEGE'],
+                            'target': dest,
+                            'path': path,
+                            'duration': len(path) + int(0.3 * len(path))
+                        }
+                                    
                 #################
                 # ORDER: PATROL #
                 #################
@@ -201,7 +221,15 @@ class MyBot:
                 ant_moved = self.move_along_path(ants, ant, current_orders)
                 if ant_moved == False:
                     logging.info("Explore ant at " + str(ant) + " appears to be stuck!")
-            
+                    
+            ###################
+            # EXECUTE: SIEGE #
+            ###################
+            elif current_order == ORDERS['SIEGE']:
+                ant_moved = self.move_along_path(ants, ant, current_orders)
+                if ant_moved == False:
+                    logging.info("Siege ant at " + str(ant) + " appears to be stuck!")
+                    
             ####################
             # EXECUTE: NOTHING #
             ####################
@@ -230,11 +258,17 @@ class MyBot:
         stats['TOTAL_SIZE'] = ants.rows * ants.cols
         stats['PATH_CACHE_SIZE'] = len(ants.path_cache)
         
-        #for ant_loc in self.standing_orders.keys():
-        #    if self.standing_orders[ant_loc]['order'] not in stats:
-        #        stats[self.standing_orders[ant_loc]['order']] = 1
-        #    else:
-        #        stats[self.standing_orders[ant_loc]['order']]+=1
+        for ant_loc in self.standing_orders.keys():
+            order = [k for k, v in ORDERS.iteritems() if v == self.standing_orders[ant_loc]['order']]
+            if len(order)==1:
+                order = "ORDER_%s" % order[0]
+            else:
+                order = "ORDER_UNKNOWN"
+        
+            if self.standing_orders[ant_loc]['order'] not in stats:
+                stats[order] = 1
+            else:
+                stats[order]+=1
                 
         for stat in stats.keys():
             logging.info(str(stat) + ": " + str(stats[stat]))

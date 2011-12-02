@@ -486,6 +486,14 @@ class Ants():
                         closest = (row, col)
         return closest
         
+
+    def nearby_enemy_hills(self, loc):
+        hills = []
+        for hill_loc, owner in self.enemy_hills():
+            if self.real_distance(loc, hill_loc) < self.viewradius:
+                hills.append(hill_loc)
+        return hills
+        
     def nearby_location(self, loc, radius=None):
         """ Find a nearby non-water location """
         if radius==None:
