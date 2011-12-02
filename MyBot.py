@@ -35,11 +35,29 @@ class MyBot:
     def do_setup(self, ants):
         # initialize data structures after learning the game settings
         pass
-    
+        
+    def move_to_target(self, ants, ant, current_orders):
+        target = current_orders[ant]['target']
+        directions = ants.direction(ant, target)
+        while directions:
+            direction = directions[0]
+            directions.remove(direction)
+            new_loc = ants.destination(ant, direction)
+            if ants.passable(new_loc):
+                ants.issue_order((ant, direction))
+                self.standing_orders[new_loc] = current_orders[ant]
+                return True
+        return False
+        
     def move_along_path(self, ants, ant, current_orders):
         """ Issue an order to move ant, along path"""
         
         path = current_orders[ant]['path']
+        
+        # If there is no path, just do a "dumb" move.
+        if not path:
+            return self.move_to_target(ants, ant, current_orders)
+        
         index = path.index(ant) # Get the current location in the path
         #logging.info("Ant at " + str(ant) + " going to " + str(current_orders[ant]['target']))
         dest = path[index+1]    # Get the "next step"
@@ -137,21 +155,27 @@ class MyBot:
                 ##################
                 if current_order == ORDERS['EXPLORE']:
                     nearby_unknowns = ants.nearby_unknowns(ant)
-                    
+                
                     dest, path = ants.find_first_path(ant, nearby_unknowns)
                     if dest:
-                        logging.info("YAY, Found an exploration path!")
                         current_orders[ant] = {
                             'order': ORDERS['PATROL'],
                             'target': dest,
                             'path': path,
                             'duration': len(path) + int(0.3 * len(path))
                         }
-                        
+                    elif nearby_unknowns:
+                        dest = nearby_unknowns[0]
+                        current_orders[ant] = {
+                            'order': ORDERS['PATROL'],
+                            'target': dest,
+                            'path': None,
+                            'duration': int(ants.distance(dest, ant) * 1.3)
+                        }
                     else:
+                        # If there are no nearby unknowns, just patrol
                         current_order = ORDERS['PATROL']
-                        logging.info("OH NOES. Nothing to explore!")
-                        
+                                                
                 
                 ################
                 # ORDER: SIEGE #
@@ -160,33 +184,27 @@ class MyBot:
                     # nearby_enemy_hills calculated above
                     dest, path = ants.find_first_path(ant, nearby_enemy_hills)
                     if dest:
-                        logging.info("Enemy hill in sight!")
                         current_orders[ant] = {
                             'order': ORDERS['SIEGE'],
                             'target': dest,
                             'path': path,
                             'duration': len(path) + int(0.3 * len(path))
                         }
-                                    
+                    else:
+                        current_order = ORDERS['PATROL']
+                        
                 #################
                 # ORDER: PATROL #
                 #################
                 if current_order == ORDERS['PATROL']:
                     nearby_location = ants.nearby_location(ant)
-                    path = ants.find_path(ant, nearby_location)
-                    if path:
-                        current_orders[ant] = {
-                            'order': ORDERS['PATROL'],
-                            'target': nearby_location,
-                            'path': path,
-                            'duration': len(path) + int(0.3*len(path))
-                        }
-                    else:
-                        current_orders[ant] = {
-                            'order': ORDERS['NOTHING']
-                        }
-                        logging.info("Coudln't find a valid path to the nearby location!")
-                        
+
+                    current_orders[ant] = {
+                        'order': ORDERS['PATROL'],
+                        'target': nearby_location,
+                        'path': None,
+                        'duration': int(ants.distance(nearby_location, ant) * 1.3)
+                    }                        
 
                 
         logging.info("Ants: " + str(len(ants.my_ants())))
@@ -210,7 +228,9 @@ class MyBot:
             # EXECUTE: PATROL #
             ###################
             elif current_order == ORDERS['PATROL']:
+                #ant_moved = self.move_along_path(ants, ant, current_orders)
                 ant_moved = self.move_along_path(ants, ant, current_orders)
+                
                 if ant_moved == False:
                     logging.info("Patrol ant at " + str(ant) + " appears to be stuck!")
                     

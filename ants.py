@@ -265,9 +265,11 @@ class Ants():
         sys.stdout.flush()
     
     def path_has_water(self, path):
-        for loc in path:
-            if self.map[loc[0]][loc[1]] == WATER:
-                return True
+        if path:
+            for loc in path:
+                if self.map[loc[0]][loc[1]] == WATER:
+                    return True
+        
         return False
         
     def unknown(self):
