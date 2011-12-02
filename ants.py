@@ -172,20 +172,22 @@ class Ants():
                 # Set the initial values
                 #self.diffusion_map[row][col] = 0
                 
-                #if (row, col) in [loc for loc, owner in self.enemy_hills()]:
-                #    self.diffusion_map[row][col] += 20000
+                if (row, col) in [loc for loc, owner in self.enemy_hills()]:
+                    self.diffusion_map[row][col] = 75000
+                if (row, col) in [loc for loc, owner in self.enemy_ants()]:
+                    self.diffusion_map[row][col] = 10000
                 # Now set up our stuff we know about (food for now!)
                 if self.map[row][col] == FOOD:
-                    self.diffusion_map[row][col] = 10000
+                    self.diffusion_map[row][col] = 100000
                 if self.map[row][col] == UNKNOWN:
-                    self.diffusion_map[row][col] = 5000
+                    self.diffusion_map[row][col] = 500
                 if self.map[row][col] == WATER:
                     self.diffusion_map[row][col] = 0    # Don't diffuse food!  
         
         #logging.info("INITIAL MAP")
         #self.print_diffusion_map()              
     
-    def diffuse_map(self, diffusionSteps=2, diffusionCoef = 0.4):
+    def diffuse_map(self, diffusionSteps=5, diffusionCoef = 0.1):
         for step in xrange(diffusionSteps):
             
             newMap = [[{} for col in range(self.cols)]
@@ -213,9 +215,9 @@ class Ants():
                     newMap[row][col] = int(val)
             
             self.diffusion_map = newMap
-            #if step==diffusionSteps-1:
+            if step==diffusionSteps-1:
                 #logging.info("FINAL MAP")
-                #self.print_diffusion_map()
+                self.print_diffusion_map()
 
     def print_diffusion_map(self):
         logging.info("HILLS: " + str(self.enemy_hills()))
@@ -223,17 +225,17 @@ class Ants():
             output = ""
             for col in xrange(self.cols):
                 if (row, col) in self.my_ants():
-                    output += "X".rjust(4) + " "
+                    output += "X".rjust(5)
                 elif self.map[row][col]==WATER:
-                    output += "W".rjust(4) + " "
+                    output += "W".rjust(5)
                 #elif self.map[row][col]==UNKNOWN:
-                #    output += "U".rjust(4) + " "
+                #    output += "U".rjust(5)
                 elif (row, col) in self.food():
-                    output += "F".rjust(4) + " "
+                    output += "F".rjust(5)
                 elif (row, col) in [loc for loc, owner in self.enemy_hills()]:
-                    output += "T".rjust(4) + " "
+                    output += "T".rjust(5)
                 elif (row, col) in self.my_hills():
-                    output += "H".rjust(4) + " "
+                    output += "H".rjust(5)
                 else:
                     output += str(self.diffusion_map[row][col]).rjust(4) + " "
             logging.info(output)

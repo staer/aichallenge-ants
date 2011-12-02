@@ -45,6 +45,7 @@ class MyBot:
             values = [(up_val, 'n'), (left_val, 'w'), (right_val, 'e'), (down_val, 's')]
             values.sort()
             values.reverse()
+            # TODO: If we have a tie, we should probably pick a random tied value...
             directions = [direction for val, direction in values]
             if up_val==0 and down_val==0 and right_val==0 and left_val==0:
                 directions = ['n','s','e','w']
