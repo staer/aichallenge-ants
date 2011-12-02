@@ -64,6 +64,7 @@ class MyBot:
         turn_number = turn_number + 1
         logging.info("Starting turn " + str(turn_number))
         
+ 
         
         current_orders = {}     # Current orders to execute this turn
         food_list = ants.food() # All the available food
@@ -174,7 +175,6 @@ class MyBot:
         # Execute the "current" orders #
         ################################
         self.standing_orders = {}
-        logging.info("STARTING EXECUTION")
         for ant in current_orders.keys():
             current_order = current_orders[ant]['order']
             
@@ -218,19 +218,23 @@ class MyBot:
                     
                     
             else:
-                logging.info("Ant at " + str(ant) + " has an unknown order: " + str(current_order))
-        logging.info("DONE EXECUTION")                            
+                logging.info("Ant at " + str(ant) + " has an unknown order: " + str(current_order))                          
         
         # Calculate some turn statistics
         stats = {}
         stats['TOTAL_ANTS'] = len(ants.my_ants())
         stats['TOTAL_FOOD'] = len(ants.food())
         stats['ENEMY_HILLS'] = len(ants.enemy_hills())
-        for ant_loc in self.standing_orders.keys():
-            if self.standing_orders[ant_loc]['order'] not in stats:
-                stats[self.standing_orders[ant_loc]['order']] = 1
-            else:
-                stats[self.standing_orders[ant_loc]['order']]+=1
+        
+        stats['TOTAL_UNKNOWN'] = len(ants.unknown())
+        stats['TOTAL_SIZE'] = ants.rows * ants.cols
+        stats['PATH_CACHE_SIZE'] = len(ants.path_cache)
+        
+        #for ant_loc in self.standing_orders.keys():
+        #    if self.standing_orders[ant_loc]['order'] not in stats:
+        #        stats[self.standing_orders[ant_loc]['order']] = 1
+        #    else:
+        #        stats[self.standing_orders[ant_loc]['order']]+=1
                 
         for stat in stats.keys():
             logging.info(str(stat) + ": " + str(stats[stat]))
