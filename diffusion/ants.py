@@ -27,6 +27,7 @@ DIFFUSION = {
     'UNKNOWN': 200,
     'OWN_HILL': 0,
     'ENEMY_HILL': 600,
+    'ENEMY_ANT': 200,
     'MAX_VALUE': 1000,
     'WATER': 0,
 }
@@ -109,7 +110,7 @@ class Ants():
                     for row in range(self.rows)]
                     
         # Just another name for a diffusion map
-        self.potential_map = [[{'FOOD': 0, 'EXPLORE': 0} for col in range(self.cols)]
+        self.potential_map = [[{'FOOD': 0, 'EXPLORE': 0, 'COMBAT': 0} for col in range(self.cols)]
                     for row in range(self.rows)]
     
     def update(self, data):
@@ -181,8 +182,9 @@ class Ants():
         while time_remaining > time_left:
             diffusion_count = diffusion_count + 1
             
+            # This can really be a cached thing since it is the same every time!
             self.set_fixed_potentials()
-            newMap = [[{'FOOD': 0, 'EXPLORE': 0} for col in xrange(self.cols)]
+            newMap = [[{'FOOD': 0, 'EXPLORE': 0, 'COMBAT': 0} for col in xrange(self.cols)]
                 for row in xrange(self.rows)]
                 
             for row in xrange(self.rows):
@@ -198,9 +200,11 @@ class Ants():
                     
                     food_total = sum([self.potential_map[r][c]['FOOD'] for ((r,c), d) in surrounding])
                     explore_total = sum([self.potential_map[r][c]['EXPLORE'] for ((r,c), d) in surrounding])
+                    combat_total = sum([self.potential_map[r][c]['COMBAT'] for ((r,c), d) in surrounding])
 
                     newMap[row][col]['FOOD'] = max(0.25 * food_total, 0)
                     newMap[row][col]['EXPLORE'] = max(0.25 * explore_total, 0)
+                    newMap[row][col]['COMBAT'] = max(0.25 * combat_total, 0)
             
                     if ant_map[row][col]==True:
                         newMap[row][col]['FOOD'] = 0
@@ -214,8 +218,6 @@ class Ants():
         logging.info("Diffused " + str(diffusion_count) + " times.")
         
     def set_fixed_potentials(self):
-        
-        
         # Fill in the food potential map
         food = self.food()
         for row, col in food:
@@ -230,7 +232,19 @@ class Ants():
                     n = len([d for ((r, c), d) in surrounding if self.map[r][c]!=UNKNOWN])
                     # If we know about some of it's neighbors then the square is on the "edge" of what we know about
                     if n > 0:
-                        self.potential_map[row][col]['EXPLORE'] = DIFFUSION['UNKNOWN']    
+                        self.potential_map[row][col]['EXPLORE'] = DIFFUSION['UNKNOWN']   
+                        
+        # Fill in enemy ant hills
+        hills = self.enemy_hills()
+        for ((row, col), owner) in hills:
+            # TODO: Enemy hill is more enticing if there are fewer enemy ants nearby
+            self.potential_map[row][col]['COMBAT'] = DIFFUSION['ENEMY_HILL'] 
+            
+        # Fill in enemy ants
+        enemies = self.enemy_ants()
+        for ((row, col), owner) in enemies:
+            # TODO: Double or triple this if they are near one of our hills?
+            self.potential_map[row][col]['COMBAT'] = DIFFUSION['ENEMY_ANT']
 
     def print_diffusion_map(self):
         for row in xrange(self.rows):
