@@ -4,7 +4,7 @@ import traceback
 import random
 import time
 from collections import defaultdict
-from math import sqrt
+import math
 
 import logging
 
@@ -26,10 +26,12 @@ DIFFUSION = {
     'FOOD': 1000,
     'UNKNOWN': 200,
     'OWN_HILL': 0,
-    'ENEMY_HILL': 600,
-    'ENEMY_ANT': 200,
-    'MAX_VALUE': 1000,
+    'ENEMY_HILL': 800,      # An enemy hill is an important target, this will be scaled based on enemies nearby
+    'ENEMY_ANT': 100,
+    'MAX_VALUE': 1000,      # Unused
     'WATER': 0,
+    'DEFEND': 300,          # Hill defense > exploring
+    'FRIENDLY_ANT': 50
 }
 
 PLAYER_ANT = 'abcdefghij'
@@ -72,6 +74,7 @@ class Ants():
         self.attackradius2 = 0
         self.spawnradius2 = 0
         self.turns = 0
+        self.attackradius = 0
         
         self.diffusion_map = None
         self.potential_map = None
@@ -112,6 +115,9 @@ class Ants():
         # Just another name for a diffusion map
         self.potential_map = [[{'FOOD': 0, 'EXPLORE': 0, 'COMBAT': 0} for col in range(self.cols)]
                     for row in range(self.rows)]
+                    
+        self.attackradius = math.sqrt(self.attackradius2)
+
     
     def update(self, data):
         'parse engine input and update the game state'
@@ -244,19 +250,67 @@ class Ants():
                     n = len([d for ((r, c), d) in surrounding if self.map[r][c]!=UNKNOWN])
                     # If we know about some of it's neighbors then the square is on the "edge" of what we know about
                     if n > 0:
-                        newMap[row][col]['EXPLORE'] = DIFFUSION['UNKNOWN']   
+                        newMap[row][col]['EXPLORE'] = DIFFUSION['UNKNOWN']
+                        
+        # TODO: Save recently visited regions so we can send our ants out to places we haven't been in a while?
+        
+           
                         
         # Fill in enemy ant hills
         hills = self.enemy_hills()
         for ((row, col), owner) in hills:
-            # TODO: Enemy hill is more enticing if there are fewer enemy ants nearby
-            newMap[row][col]['COMBAT'] = DIFFUSION['ENEMY_HILL'] 
+            radius = self.attackradius * 2.0
+            friendRadius = self.attackradius * 3.0
+            nEnemies = len(self.enemy_ants_nearby((row, col), radius))
+            nFriends = len(self.my_ants_nearby((row,col), friendRadius))
             
+            diff = nEnemies - nFriends
+            if diff >= 2: # RUN AWAY
+                newMap[row][col]['COMBAT'] = 0
+                newMap[row][col]['FOOD'] = 0
+                newMap[row][col]['EXPLORE'] = 0
+                logging.info("Running away from enemy hill at " + str((row, col)))
+                logging.info("Them: " + str(nEnemies) + " vs. Us: " + str(nFriends))
+            else: # ATTACK
+                newMap[row][col]['COMBAT'] = DIFFUSION['ENEMY_HILL']
+                logging.info("Attacking enemy hill at " + str((row, col)))
+                logging.info("Them: " + str(nEnemies) + " vs. Us: " + str(nFriends))
+                
+                
+                
+            
+        # Our ants
+        ants = []#self.my_ants()
+        for (row,col) in ants:
+            newMap[row][col]['COMBAT'] = DIFFUSION['FRIENDLY_ANT']
+            
+                        
         # Fill in enemy ants
-        enemies = self.enemy_ants()
+        enemies = []#self.enemy_ants()
         for ((row, col), owner) in enemies:
-            # TODO: Double or triple this if they are near one of our hills?
-            newMap[row][col]['COMBAT'] = DIFFUSION['ENEMY_ANT']
+            radius = self.attackradius*2.0
+            nEnemies = len(self.enemy_ants_nearby((row, col), radius))
+            nFriends = len(self.my_ants_nearby((row, col), radius))
+            
+            diff = nEnemies - nFriends
+            if diff < 0:   # Attack if we outnumber
+                newMap[row][col]['COMBAT'] = DIFFUSION['ENEMY_ANT']
+            elif diff == 0: # No-op if we're tied, just do what you were doing
+                pass
+            else:  # If we're outnumbered, walk away.
+                newMap[row][col]['COMBAT'] = 0
+                newMap[row][col]['FOOD'] = 0
+                newMap[row][col]['EXPLORE'] = 0
+                
+        # Defend allied hills
+        # If there are any enmies within x attack units, make sure we have defense!
+        for (row, col) in self.my_hills():
+            radius = self.attackradius*1.5
+            nEnemies = len(self.enemy_ants_nearby((row, col), radius))
+            if nEnemies > 0:
+                logging.info("DEFENDING THE HILL AT: " + str((row,col)))
+                newMap[row][col]['COMBAT'] = DIFFUSION['DEFEND']
+            
     
         return newMap
 
@@ -384,7 +438,32 @@ class Ants():
             return False
             
         return self.map[row][col] != WATER
+
+    def my_ants_nearby(self, loc, radius=None):
+        """ Returns a list of friendly ants near the target location """
+        if radius == None:
+            radius = int(2*self.attackradius)
+            
+        nearby = []
+        mine = self.my_ants()
+        for (row, col) in mine:
+            if self.real_distance((row, col), loc) < radius:
+                nearby.append((row, col))
+        return nearby
     
+    def enemy_ants_nearby(self, loc, radius=None):
+        """ Returns a list of enemy ants near the target location """
+        if radius == None:
+            radius = int(2*self.attackradius)
+        
+        nearby = []
+        enemies = self.enemy_ants()
+        for ((row, col), owner) in enemies:
+            if self.real_distance((row,col), loc) < radius:
+                nearby.append((row,col))
+        
+        return nearby
+            
     def unoccupied(self, loc):
         'true if no ants are at the location'
         row, col = loc
@@ -403,6 +482,12 @@ class Ants():
         d_col = min(abs(col1 - col2), self.cols - abs(col1 - col2))
         d_row = min(abs(row1 - row2), self.rows - abs(row1 - row2))
         return d_row + d_col
+
+    def real_distance(self, loc1, loc2):
+        dr = min(abs(loc1[0]-loc2[0]), self.rows - abs(loc1[0]-loc2[0]))
+        dc = min(abs(loc1[1]-loc2[1]), self.cols - abs(loc1[1]-loc2[1]))
+        d = math.sqrt(dr**2 + dc**2)
+        return d
 
     def direction(self, loc1, loc2):
         'determine the 1 or 2 fastest (closest) directions to reach a location'
@@ -440,7 +525,7 @@ class Ants():
             if not hasattr(self, 'vision_offsets_2'):
                 # precalculate squares around an ant to set as visible
                 self.vision_offsets_2 = []
-                mx = int(sqrt(self.viewradius2))
+                mx = int(math.sqrt(self.viewradius2))
                 for d_row in range(-mx,mx+1):
                     for d_col in range(-mx,mx+1):
                         d = d_row**2 + d_col**2
