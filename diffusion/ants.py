@@ -174,6 +174,9 @@ class Ants():
         time_left = self.turntime * 0.35
         time_remaining = self.time_remaining()
         
+        pMap = self.get_fixed_potentials()
+        self.set_fixed_potentials(pMap)
+        
         # Create an ant map so we don't diffuse food potentials
         ant_map = [[False for col in xrange(self.cols)] for row in xrange(self.rows)]
         for row, col in self.my_ants():
@@ -181,9 +184,7 @@ class Ants():
         
         while time_remaining > time_left:
             diffusion_count = diffusion_count + 1
-            
-            # This can really be a cached thing since it is the same every time!
-            self.set_fixed_potentials()
+        
             newMap = [[{'FOOD': 0, 'EXPLORE': 0, 'COMBAT': 0} for col in xrange(self.cols)]
                 for row in xrange(self.rows)]
                 
@@ -210,18 +211,29 @@ class Ants():
                         newMap[row][col]['FOOD'] = 0
                         newMap[row][col]['EXPLORE'] = 0
             
-            self.potential_map = newMap            
+            self.potential_map = newMap  
+            self.set_fixed_potentials(pMap)          
             
             time_remaining = self.time_remaining()
         
         # Before exiting give some useful info!
         logging.info("Diffused " + str(diffusion_count) + " times.")
         
-    def set_fixed_potentials(self):
+    def set_fixed_potentials(self, pMap):
+        for row in xrange(self.rows):
+            for col in xrange(self.cols):
+                for k in pMap[row][col].iterkeys():
+                    if pMap[row][col][k] > 0:
+                        self.potential_map[row][col][k] = pMap[row][col][k]    
+    
+    def get_fixed_potentials(self):
+        newMap = [[{'FOOD': 0, 'EXPLORE': 0, 'COMBAT': 0} for col in xrange(self.cols)]
+            for row in xrange(self.rows)]
+        
         # Fill in the food potential map
         food = self.food()
         for row, col in food:
-            self.potential_map[row][col]['FOOD'] = DIFFUSION['FOOD']
+            newMap[row][col]['FOOD'] = DIFFUSION['FOOD']
             
         # Fill in the unknown potential map
         for row in xrange(self.rows):
@@ -232,19 +244,21 @@ class Ants():
                     n = len([d for ((r, c), d) in surrounding if self.map[r][c]!=UNKNOWN])
                     # If we know about some of it's neighbors then the square is on the "edge" of what we know about
                     if n > 0:
-                        self.potential_map[row][col]['EXPLORE'] = DIFFUSION['UNKNOWN']   
+                        newMap[row][col]['EXPLORE'] = DIFFUSION['UNKNOWN']   
                         
         # Fill in enemy ant hills
         hills = self.enemy_hills()
         for ((row, col), owner) in hills:
             # TODO: Enemy hill is more enticing if there are fewer enemy ants nearby
-            self.potential_map[row][col]['COMBAT'] = DIFFUSION['ENEMY_HILL'] 
+            newMap[row][col]['COMBAT'] = DIFFUSION['ENEMY_HILL'] 
             
         # Fill in enemy ants
         enemies = self.enemy_ants()
         for ((row, col), owner) in enemies:
             # TODO: Double or triple this if they are near one of our hills?
-            self.potential_map[row][col]['COMBAT'] = DIFFUSION['ENEMY_ANT']
+            newMap[row][col]['COMBAT'] = DIFFUSION['ENEMY_ANT']
+    
+        return newMap
 
     def print_diffusion_map(self):
         for row in xrange(self.rows):
