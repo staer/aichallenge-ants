@@ -128,7 +128,9 @@ class Ants():
         self.vision = None
         
         # clear hill, ant and food data
-        self.hill_list = {}
+        
+        #self.hill_list = {}    # Don't clear the food list every turn
+        
         for row, col in self.ant_list.keys():
             self.map[row][col] = LAND
         self.ant_list = {}
@@ -173,7 +175,13 @@ class Ants():
         for row in xrange(self.rows):
             for col in xrange(self.cols): 
                 if self.map[row][col] == UNKNOWN and self.visible((row, col)):
-                    self.map[row][col] = LAND                                       
+                    self.map[row][col] = LAND
+            
+        # Update the hill list, we know a hill is destroyed when we have one of our ants standing on top of it!        
+        for ant_loc in self.my_ants():
+            if ant_loc in [(row, col) for ((row, col), owner) in self.enemy_hills()]:
+                logging.info("We are standing on an enemy hill, remove it from memory!")
+                del self.hill_list[(row, col)]
                     
     def diffuse(self):
         diffusion_count = 0
@@ -273,18 +281,19 @@ class Ants():
                 logging.info("Them: " + str(nEnemies) + " vs. Us: " + str(nFriends))
             else: # ATTACK
                 newMap[row][col]['COMBAT'] = DIFFUSION['ENEMY_HILL']
-                logging.info("Attacking enemy hill at " + str((row, col)))
-                logging.info("Them: " + str(nEnemies) + " vs. Us: " + str(nFriends))
                 
-                
-                
-            
+                if nEnemies!=0 or nFriends!=0:
+                    logging.info("Attacking enemy hill at " + str((row, col)))
+                    logging.info("Them: " + str(nEnemies) + " vs. Us: " + str(nFriends))
+              
+        # TODO
         # Our ants
         ants = []#self.my_ants()
         for (row,col) in ants:
             newMap[row][col]['COMBAT'] = DIFFUSION['FRIENDLY_ANT']
             
-                        
+                  
+        # TODO
         # Fill in enemy ants
         enemies = []#self.enemy_ants()
         for ((row, col), owner) in enemies:
