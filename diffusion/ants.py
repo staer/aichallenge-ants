@@ -24,9 +24,10 @@ UNKNOWN = -5
 
 DIFFUSION = {
     'FOOD': 1000,
-    'UNKNOWN': 200,
+    'UNKNOWN': 300,#200,
+    'REGION': 300,          # Pull ants to a region that we dont' have many ants in?
     'OWN_HILL': 0,
-    'ENEMY_HILL': 800,      # An enemy hill is an important target, this will be scaled based on enemies nearby
+    'ENEMY_HILL': 500,#800,      # An enemy hill is an important target, this will be scaled based on enemies nearby
     'ENEMY_ANT': 100,
     'MAX_VALUE': 1000,      # Unused
     'WATER': 0,
@@ -80,6 +81,13 @@ class Ants():
         self.potential_map = None
         self.ant_locations = []
         
+        self.turn_num = 0
+        
+        # Region map splits the map into 10x10 cells which we use to ants per region
+        # To attract ants to new areas?
+        self.region_map = None
+        self.region_rows = 0
+        self.region_cols = 0
         
 
     def setup(self, data):
@@ -113,23 +121,25 @@ class Ants():
                     for row in range(self.rows)]
                     
         # Just another name for a diffusion map
-        self.potential_map = [[{'FOOD': 0, 'EXPLORE': 0, 'COMBAT': 0} for col in range(self.cols)]
+        self.potential_map = [[{'FOOD': 0, 'EXPLORE': 0, 'COMBAT': 0, 'ALLIED': 0, 'ENEMY': 0} for col in range(self.cols)]
                     for row in range(self.rows)]
                     
         self.attackradius = math.sqrt(self.attackradius2)
-
+        
+        self.region_rows = int(math.ceil(self.rows / 10.0))
+        self.region_cols = int(math.ceil(self.cols / 10.0))
+        
+        self.region_map = [[0 for col in range(self.region_cols)]
+                    for row in range(self.region_rows)]
     
     def update(self, data):
         'parse engine input and update the game state'
         # start timer
         self.turn_start_time = time.time()
+        self.turn_num += 1
         
         # reset vision
         self.vision = None
-        
-        # clear hill, ant and food data
-        
-        #self.hill_list = {}    # Don't clear the food list every turn
         
         for row, col in self.ant_list.keys():
             self.map[row][col] = LAND
@@ -181,7 +191,26 @@ class Ants():
         for ant_loc in self.my_ants():
             if ant_loc in [(row, col) for ((row, col), owner) in self.enemy_hills()]:
                 logging.info("We are standing on an enemy hill, remove it from memory!")
-                del self.hill_list[(row, col)]
+                del self.hill_list[ant_loc]
+                
+        # Update our region map with ant count per region
+        #self.region_map = [[0 for col in range(self.region_cols)]
+        #            for row in range(self.region_rows)]
+        
+        for (row, col) in self.my_ants():
+            region_row = int(row / 10.0)
+            region_col = int(col / 10.0)
+            # We save the turn number last visited for each region
+            self.region_map[region_row][region_col] = self.turn_num 
+        
+        # Print the region map for fun!
+        for row in xrange(self.region_rows):
+            output = ""
+            for col in xrange(self.region_cols):
+                output += str(self.region_map[row][col]).rjust(5)
+            logging.info(output)
+        
+        
                     
     def diffuse(self):
         diffusion_count = 0
@@ -199,7 +228,7 @@ class Ants():
         while time_remaining > time_left:
             diffusion_count = diffusion_count + 1
         
-            newMap = [[{'FOOD': 0, 'EXPLORE': 0, 'COMBAT': 0} for col in xrange(self.cols)]
+            newMap = [[{'FOOD': 0, 'EXPLORE': 0, 'COMBAT': 0, 'ALLIED': 0, 'ENEMY': 0} for col in xrange(self.cols)]
                 for row in xrange(self.rows)]
                 
             for row in xrange(self.rows):
@@ -216,10 +245,14 @@ class Ants():
                     food_total = sum([self.potential_map[r][c]['FOOD'] for ((r,c), d) in surrounding])
                     explore_total = sum([self.potential_map[r][c]['EXPLORE'] for ((r,c), d) in surrounding])
                     combat_total = sum([self.potential_map[r][c]['COMBAT'] for ((r,c), d) in surrounding])
+                    allied_total = sum([self.potential_map[r][c]['ALLIED'] for ((r,c), d) in surrounding])
+                    enemy_total = sum([self.potential_map[r][c]['ENEMY'] for ((r,c), d) in surrounding])
 
                     newMap[row][col]['FOOD'] = max(0.25 * food_total, 0)
                     newMap[row][col]['EXPLORE'] = max(0.25 * explore_total, 0)
                     newMap[row][col]['COMBAT'] = max(0.25 * combat_total, 0)
+                    newMap[row][col]['ALLIED'] = int(max(0.25 * allied_total, 0))
+                    newMap[row][col]['ENEMY'] = int(max(0.25 * enemy_total, 0))
             
                     if ant_map[row][col]==True:
                         newMap[row][col]['FOOD'] = 0
@@ -233,6 +266,8 @@ class Ants():
         # Before exiting give some useful info!
         logging.info("Diffused " + str(diffusion_count) + " times.")
         
+        self.print_diffusion_map('ALLIED')
+        
     def set_fixed_potentials(self, pMap):
         for row in xrange(self.rows):
             for col in xrange(self.cols):
@@ -241,8 +276,17 @@ class Ants():
                         self.potential_map[row][col][k] = pMap[row][col][k]    
     
     def get_fixed_potentials(self):
-        newMap = [[{'FOOD': 0, 'EXPLORE': 0, 'COMBAT': 0} for col in xrange(self.cols)]
+        """ This should be called once per turn to get the potentials for things on the diffusion map """
+        
+        newMap = [[{'FOOD': 0, 'EXPLORE': 0, 'COMBAT': 0, 'ALLIED': 0, 'ENEMY': 0} for col in xrange(self.cols)]
             for row in xrange(self.rows)]
+        
+        # Do our own ants
+        for (row, col) in self.my_ants():
+            newMap[row][col]['ALLIED'] = 100
+        # Do enemy ants
+        for ((row, col), owner) in self.enemy_ants():
+            newMap[row][col]['ENEMY'] = 100
         
         # Fill in the food potential map
         food = self.food()
@@ -260,8 +304,43 @@ class Ants():
                     if n > 0:
                         newMap[row][col]['EXPLORE'] = DIFFUSION['UNKNOWN']
                         
-        # TODO: Save recently visited regions so we can send our ants out to places we haven't been in a while?
+        # Check the regions and update the map so we are more likely to travel to regions that dont' have ants
+        #total_ants = float(len(self.my_ants()))
+        #total_regions = float(self.region_rows * self.region_cols) # Can precalc this
+        #ants_per_region = int(math.ceil(total_ants / total_regions))
         
+        for row in xrange(self.region_rows):
+            for col in xrange(self.region_cols):
+                # Calculate how many turns it has been since we last visited
+                diff = self.turn_num - self.region_map[row][col]
+                if diff > 20:   # If we haven't been there in 20 turns, start making it a place we want to go
+                    #r = random.randint(0, 9) + 10 * row
+                    #c = random.randint(0, 9) + 10 * col
+                    count = 0
+                    for count in xrange(15):
+                        r = random.randint(0, 9) + 10 * row
+                        c = random.randint(0, 9) + 10 * col
+                        if r < self.rows and c < self.cols and self.map[r][c]!=WATER:
+                            pass
+                            #newMap[r][c]['EXPLORE'] = 200#100 * diff
+                    #while (r >= self.rows or c >= self.cols) or self.map[r][c]==WATER:
+                    #    count+=1    # dont' run more than 100 times
+                    #    r = random.randint(0, 9) + 10 * row
+                    #    c = random.randint(0, 9) + 10 * col
+                    
+                    #logging.info("Setting a region to " + str(5 * diff))
+                    #newMap[r][c]['EXPLORE'] = 100 * diff
+                
+                #if self.region_map[row][col] < ants_per_region:
+                #    r = random.randint(0, 9) + 10 * row
+                #    c = random.randint(0, 9) + 10 * col
+                #    while (r >= self.rows or c >= self.cols) or self.map[r][c]==WATER:
+                #        r = random.randint(0, 9) + 10 * row
+                #        c = random.randint(0, 9) + 10 * col
+                    # Randomly put some unknown in a region without the appropriate number of ants?
+                    #newMap[r][c]['EXPLORE'] = 100#DIFFUSION['UNKNOWN']
+                    
+                    
            
                         
         # Fill in enemy ant hills
@@ -279,6 +358,13 @@ class Ants():
                 newMap[row][col]['EXPLORE'] = 0
                 logging.info("Running away from enemy hill at " + str((row, col)))
                 logging.info("Them: " + str(nEnemies) + " vs. Us: " + str(nFriends))
+            elif nFriends==0 and nEnemies==0:
+                newMap[row][col]['COMBAT'] = DIFFUSION['ENEMY_HILL']
+                #newMap[row][col]['EXPLORE'] = DIFFUSION['UNKNOWN']
+                # If we don't have any forces nearby, explore the enemy hill
+                
+                # This is the case that we know nothing about the hill really, but we should have a slight pull towards it always
+                #newMap[row][col]['COMBAT'] = int(0.25 * DIFFUSION['ENEMY_HILL'])
             else: # ATTACK
                 newMap[row][col]['COMBAT'] = DIFFUSION['ENEMY_HILL']
                 
@@ -323,25 +409,28 @@ class Ants():
     
         return newMap
 
-    def print_diffusion_map(self):
+    def print_diffusion_map(self, map_type):
         for row in xrange(self.rows):
             line = ""
             for col in xrange(self.cols):
                 output = ""
-                if self.map[row][col]==WATER:
-                    output += "="
-                elif (row, col) in self.my_ants():
-                    output += "A"# + str(self.diffusion_map[row][col])
-                elif (row, col) in self.my_hills():
-                    output += "H"# + str(self.diffusion_map[row][col])
-                elif self.map[row][col] == UNKNOWN and self.diffusion_map[row][col]==0:
-                    output += "*"
-                elif (row, col) in self.food():
-                    output += "F" + str(self.diffusion_map[row][col])
-                elif self.diffusion_map[row][col] == 0:
-                    output += " "
-                else:    
-                    output += str(self.diffusion_map[row][col])
+                
+                #if self.map[row][col]==WATER:
+                #    output += "="
+                #elif (row, col) in self.my_ants():
+                #    output += "A"# + str(self.diffusion_map[row][col])
+                #elif (row, col) in self.my_hills():
+                #    output += "H"# + str(self.diffusion_map[row][col])
+                #elif self.map[row][col] == UNKNOWN and self.diffusion_map[row][col]==0:
+                #    output += "*"
+                #elif (row, col) in self.food():
+                #    output += "F" + str(self.diffusion_map[row][col])
+                #elif self.diffusion_map[row][col] == 0:
+                #    output += " "
+                #else:    
+                #    output += str(self.diffusion_map[row][col])
+                #output += str(self.potential_map[row][col][map_type])
+                output += str(self.potential_map[row][col]['ALLIED']-self.potential_map[row][col]['ENEMY'])
                 output = output.rjust(6)
                 line += output
             
