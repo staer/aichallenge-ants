@@ -24,11 +24,14 @@ UNKNOWN = -5
 
 DIFFUSION = {
     'FOOD': 1000,
-    'UNKNOWN': 300,#200,
+    'UNKNOWN': 350,#200,
     'REGION': 300,          # Pull ants to a region that we dont' have many ants in?
     'OWN_HILL': 0,
-    'ENEMY_HILL': 500,#800,      # An enemy hill is an important target, this will be scaled based on enemies nearby
-    'ENEMY_ANT': 100,
+    'ENEMY_HILL': 350,#500,#800,      # An enemy hill that we can't see, we should have a small draw to it so we can check it out.
+    'ENEMY_HILL_VISIBLE': 800,       # An enemy hill in visible range should be a primary target
+    
+    
+    'ENEMY_ANT': 175,#250, 500,
     'MAX_VALUE': 1000,      # Unused
     'WATER': 0,
     'DEFEND': 300,          # Hill defense > exploring
@@ -255,8 +258,10 @@ class Ants():
                     newMap[row][col]['ENEMY'] = int(max(0.25 * enemy_total, 0))
             
                     if ant_map[row][col]==True:
-                        newMap[row][col]['FOOD'] = 0
-                        newMap[row][col]['EXPLORE'] = 0
+                        newMap[row][col]['FOOD'] *= 0
+                        newMap[row][col]['EXPLORE'] *= 0
+                        # Don't diffuse combat? Then we should surround the target (maybe?)
+                        newMap[row][col]['COMBAT'] *= 0
             
             self.potential_map = newMap  
             self.set_fixed_potentials(pMap)          
@@ -266,7 +271,7 @@ class Ants():
         # Before exiting give some useful info!
         logging.info("Diffused " + str(diffusion_count) + " times.")
         
-        self.print_diffusion_map('ALLIED')
+        #self.print_diffusion_map('ALLIED')
         
     def set_fixed_potentials(self, pMap):
         for row in xrange(self.rows):
@@ -283,10 +288,11 @@ class Ants():
         
         # Do our own ants
         for (row, col) in self.my_ants():
-            newMap[row][col]['ALLIED'] = 100
+            newMap[row][col]['ALLIED'] = 1000
         # Do enemy ants
         for ((row, col), owner) in self.enemy_ants():
-            newMap[row][col]['ENEMY'] = 100
+            newMap[row][col]['ENEMY'] = 1000
+            newMap[row][col]['COMBAT'] = DIFFUSION['ENEMY_ANT']        
         
         # Fill in the food potential map
         food = self.food()
@@ -346,6 +352,13 @@ class Ants():
         # Fill in enemy ant hills
         hills = self.enemy_hills()
         for ((row, col), owner) in hills:
+            if self.visible((row, col)):
+                newMap[row][col]['COMBAT'] = DIFFUSION['ENEMY_HILL_VISIBLE']
+            else:
+                newMap[row][col]['COMBAT'] = DIFFUSION['ENEMY_HILL']
+            
+            #newMap[row][col]['COMBAT'] = DIFFUSION['ENEMY_HILL']
+            continue
             radius = self.attackradius * 2.0
             friendRadius = self.attackradius * 3.0
             nEnemies = len(self.enemy_ants_nearby((row, col), radius))
@@ -371,40 +384,16 @@ class Ants():
                 if nEnemies!=0 or nFriends!=0:
                     logging.info("Attacking enemy hill at " + str((row, col)))
                     logging.info("Them: " + str(nEnemies) + " vs. Us: " + str(nFriends))
-              
-        # TODO
-        # Our ants
-        ants = []#self.my_ants()
-        for (row,col) in ants:
-            newMap[row][col]['COMBAT'] = DIFFUSION['FRIENDLY_ANT']
-            
                   
-        # TODO
-        # Fill in enemy ants
-        enemies = []#self.enemy_ants()
-        for ((row, col), owner) in enemies:
-            radius = self.attackradius*2.0
-            nEnemies = len(self.enemy_ants_nearby((row, col), radius))
-            nFriends = len(self.my_ants_nearby((row, col), radius))
-            
-            diff = nEnemies - nFriends
-            if diff < 0:   # Attack if we outnumber
-                newMap[row][col]['COMBAT'] = DIFFUSION['ENEMY_ANT']
-            elif diff == 0: # No-op if we're tied, just do what you were doing
-                pass
-            else:  # If we're outnumbered, walk away.
-                newMap[row][col]['COMBAT'] = 0
-                newMap[row][col]['FOOD'] = 0
-                newMap[row][col]['EXPLORE'] = 0
                 
         # Defend allied hills
         # If there are any enmies within x attack units, make sure we have defense!
-        for (row, col) in self.my_hills():
-            radius = self.attackradius*1.5
-            nEnemies = len(self.enemy_ants_nearby((row, col), radius))
-            if nEnemies > 0:
-                logging.info("DEFENDING THE HILL AT: " + str((row,col)))
-                newMap[row][col]['COMBAT'] = DIFFUSION['DEFEND']
+        #for (row, col) in self.my_hills():
+        #    radius = self.attackradius*1.5
+        #    nEnemies = len(self.enemy_ants_nearby((row, col), radius))
+        #    if nEnemies > 0:
+        #        logging.info("DEFENDING THE HILL AT: " + str((row,col)))
+        #        newMap[row][col]['COMBAT'] = DIFFUSION['DEFEND']
             
     
         return newMap
@@ -430,7 +419,12 @@ class Ants():
                 #else:    
                 #    output += str(self.diffusion_map[row][col])
                 #output += str(self.potential_map[row][col][map_type])
-                output += str(self.potential_map[row][col]['ALLIED']-self.potential_map[row][col]['ENEMY'])
+                if (row, col) in self.my_ants():
+                    output += "*" + str(self.potential_map[row][col]['ALLIED']-self.potential_map[row][col]['ENEMY'])
+                elif (row, col) in [(r, c) for ((r, c), owner) in self.enemy_ants()]:
+                    output += "@" + str(self.potential_map[row][col]['ALLIED']-self.potential_map[row][col]['ENEMY'])
+                else:
+                    output += str(self.potential_map[row][col]['ALLIED']-self.potential_map[row][col]['ENEMY'])
                 output = output.rjust(6)
                 line += output
             
