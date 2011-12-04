@@ -56,21 +56,32 @@ class MyBot:
             max_explore_val = max([ants.potential_map[r][c]['EXPLORE'] for ((r, c), d) in surrounding])
             max_combat_val = max([ants.potential_map[r][c]['COMBAT'] for ((r, c), d) in surrounding])
             
-            if max_food_val!=0 and max_food_val >= max_explore_val and max_food_val >= max_combat_val:
+            if max_combat_val!=0 and max_combat_val > max_food_val and max_combat_val > max_explore_val and len(ants.my_ants()) > len(ants.enemy_ants()):
+                orders['combat']+=1
+                directions = [d for ((r, c), d) in surrounding if ants.potential_map[r][c]['COMBAT']==max_combat_val]
+            elif max_food_val!=0 and max_food_val >= max_explore_val and max_food_val >= max_combat_val:
                 orders['food']+=1
                 directions = [d for ((r, c), d) in surrounding if ants.potential_map[r][c]['FOOD']==max_food_val]
             elif max_explore_val!=0 and max_explore_val > max_food_val and max_explore_val > max_combat_val:
                 orders['explore']+=1
                 directions = [d for ((r, c), d) in surrounding if ants.potential_map[r][c]['EXPLORE']==max_explore_val]
-            elif max_combat_val!=0 and max_combat_val > max_food_val and max_combat_val > max_explore_val:
-                orders['combat']+=1
-                directions = [d for ((r, c), d) in surrounding if ants.potential_map[r][c]['COMBAT']==max_combat_val]        
-            elif max_explore_val==0 and max_food_val==0:
+                    
+            else:# max_explore_val==0 and max_food_val==0:
                 orders['random']+=1
                 directions = ['n','s','e','w']
                 random.shuffle(directions)          
-            else:
-                logging.info("THIS SHOULDN'T HAPPEN!?")
+                
+            
+            # Check the difference in diffused allied vs enemy values, if the difference is sufficiently small it means
+            # that there are more enemies nearby than allies so just move away until reinforcements come.    
+            # Move in the direction of "highest" difference meaning closer to allies. If the way is blocked mvoe to the next best one, etc etc.
+            diff = ants.potential_map[row][col]['ALLIED'] - ants.potential_map[row][col]['ENEMY']
+            if diff < 750:
+                logging.info("Ant at " + str((row, col)) + " should run away!")
+                directions = [(ants.potential_map[r][c]['ALLIED'] - ants.potential_map[r][c]['ENEMY'], d) for ((r, c), d) in surrounding]
+                directions.sort()
+                directions.reverse()
+                directions = [d for (v, d) in directions]
         
             # Move the an in one of the available directions
             ant_moved = False
@@ -91,7 +102,8 @@ class MyBot:
                 return
 
         stats = {}
-        stats['TOTAL_ANTS'] = len(ants.my_ants())
+        stats['MY_ANTS'] = len(ants.my_ants())
+        stats['ENEMY_ANTS'] = len(ants.enemy_ants())
         stats['TOTAL_FOOD'] = len(ants.food())
         stats['ENEMY_HILLS'] = len(ants.enemy_hills())
         stats['UNKNOWN'] = len(ants.unknown())
