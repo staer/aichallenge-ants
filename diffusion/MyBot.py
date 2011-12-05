@@ -59,34 +59,58 @@ class MyBot:
             if max_combat_val!=0 and max_combat_val > max_food_val and max_combat_val > max_explore_val and len(ants.my_ants()) > len(ants.enemy_ants()):
                 orders['combat']+=1
                 directions = [d for ((r, c), d) in surrounding if ants.potential_map[r][c]['COMBAT']==max_combat_val]
+                random.shuffle(directions)
+                
+                d2 = [d for ((r, c), d) in surrounding if ants.potential_map[r][c]['COMBAT']!=max_combat_val]
+                d2.sort()
+                d2.reverse()
+                directions = directions + d2
             elif max_food_val!=0 and max_food_val >= max_explore_val and max_food_val >= max_combat_val:
                 orders['food']+=1
                 directions = [d for ((r, c), d) in surrounding if ants.potential_map[r][c]['FOOD']==max_food_val]
+                random.shuffle(directions)
+                
+                d2 = [d for ((r, c), d) in surrounding if ants.potential_map[r][c]['FOOD']!=max_combat_val]
+                d2.sort()
+                d2.reverse()
+                directions = directions + d2
             elif max_explore_val!=0 and max_explore_val > max_food_val and max_explore_val > max_combat_val:
                 orders['explore']+=1
                 directions = [d for ((r, c), d) in surrounding if ants.potential_map[r][c]['EXPLORE']==max_explore_val]
-                    
+                random.shuffle(directions)
+                
+                d2 = [d for ((r, c), d) in surrounding if ants.potential_map[r][c]['EXPLORE']!=max_combat_val]
+                d2.sort()
+                d2.reverse()
+                directions = directions + d2
+                
             else:# max_explore_val==0 and max_food_val==0:
                 orders['random']+=1
                 directions = ['n','s','e','w']
-                random.shuffle(directions)          
+                random.shuffle(directions)   
+                
+                
+                
+                
                 
             
             # Check the difference in diffused allied vs enemy values, if the difference is sufficiently small it means
             # that there are more enemies nearby than allies so just move away until reinforcements come.    
             # Move in the direction of "highest" difference meaning closer to allies. If the way is blocked mvoe to the next best one, etc etc.
-            diff = ants.potential_map[row][col]['ALLIED'] - ants.potential_map[row][col]['ENEMY']
-            if diff < 750:
-                logging.info("Ant at " + str((row, col)) + " should run away!")
-                directions = [(ants.potential_map[r][c]['ALLIED'] - ants.potential_map[r][c]['ENEMY'], d) for ((r, c), d) in surrounding]
-                directions.sort()
-                directions.reverse()
-                directions = [d for (v, d) in directions]
+            #diff = ants.potential_map[row][col]['ALLIED'] - ants.potential_map[row][col]['ENEMY']
+            #if diff < 750:
+            #    directions = [(ants.potential_map[r][c]['ALLIED'] - ants.potential_map[r][c]['ENEMY'], d) for ((r, c), d) in surrounding]
+            #    directions.sort()
+            #    directions.reverse()
+            #    logging.info("Ant at " + str((row, col)) + " should run away to: " + str(directions))
+            #    directions = [d for (v, d) in directions]
+            #    logging.info("Ant at " + str((row, col)) + " should run away to: " + str(directions))
         
             # Move the an in one of the available directions
             ant_moved = False
             while directions:
-                direction = random.choice(directions)
+                direction = directions[0]
+                #direction = random.choice(directions)
                 directions.remove(direction)
                 new_loc = ants.destination(ant_loc, direction)
                 if ants.passable(new_loc):
