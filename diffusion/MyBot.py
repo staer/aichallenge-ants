@@ -45,8 +45,15 @@ class MyBot:
             'combat': 0,
         }
         
+        defense_locations = ants.defense_locations()
+    
         for ant_loc in ants.my_ants():
             row, col = ant_loc
+            
+            # If the ant is a defense ant, just move on
+            if (row, col) in defense_locations:
+                logging.info("Ant at " + str((row, col)) + " is on defense.")
+                continue
 
             # Get the surrounding squares
             surrounding = ants.surrounding_squares(ant_loc)
@@ -89,8 +96,12 @@ class MyBot:
                 directions = ['n','s','e','w']
                 random.shuffle(directions)   
                 
-                
-                
+                        
+            # If they are in a defensable position, don't move the ant
+            #if (row, col) in defense_positions and ants_on_defense > 0:
+            #    logging.info("Ant at " + str((row, col)) + " is on defense, not moving")
+            #    ants_on_defense -= 1
+            #    directions = []
                 
                 
             
