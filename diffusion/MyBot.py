@@ -3,6 +3,7 @@ from ants import *
 
 import logging
 import random
+import time
 
 turn_number = 0
 
@@ -35,7 +36,6 @@ class MyBot:
         turn_number = turn_number + 1
         logging.info("Starting turn " + str(turn_number))
         
-        
         ants.diffuse()
         
         orders = {
@@ -52,7 +52,7 @@ class MyBot:
             
             # If the ant is a defense ant, just move on
             if (row, col) in defense_locations:
-                logging.info("Ant at " + str((row, col)) + " is on defense.")
+                #logging.info("Ant at " + str((row, col)) + " is on defense.")
                 continue
 
             # Get the surrounding squares
@@ -95,27 +95,6 @@ class MyBot:
                 orders['random']+=1
                 directions = ['n','s','e','w']
                 random.shuffle(directions)   
-                
-                        
-            # If they are in a defensable position, don't move the ant
-            #if (row, col) in defense_positions and ants_on_defense > 0:
-            #    logging.info("Ant at " + str((row, col)) + " is on defense, not moving")
-            #    ants_on_defense -= 1
-            #    directions = []
-                
-                
-            
-            # Check the difference in diffused allied vs enemy values, if the difference is sufficiently small it means
-            # that there are more enemies nearby than allies so just move away until reinforcements come.    
-            # Move in the direction of "highest" difference meaning closer to allies. If the way is blocked mvoe to the next best one, etc etc.
-            #diff = ants.potential_map[row][col]['ALLIED'] - ants.potential_map[row][col]['ENEMY']
-            #if diff < 750:
-            #    directions = [(ants.potential_map[r][c]['ALLIED'] - ants.potential_map[r][c]['ENEMY'], d) for ((r, c), d) in surrounding]
-            #    directions.sort()
-            #    directions.reverse()
-            #    logging.info("Ant at " + str((row, col)) + " should run away to: " + str(directions))
-            #    directions = [d for (v, d) in directions]
-            #    logging.info("Ant at " + str((row, col)) + " should run away to: " + str(directions))
         
             # Move the an in one of the available directions
             ant_moved = False
@@ -128,13 +107,14 @@ class MyBot:
                     ants.issue_order((ant_loc, direction))
                     ant_moved = True
                     break    
-            if ant_moved == False:
-                logging.info("Ant " + str(ant_loc) + " appears to be stuck!")    
+            #if ant_moved == False:
+                #logging.info("Ant " + str(ant_loc) + " appears to be stuck!")    
 
             # check if we still have time left to calculate more orders
             if ants.time_remaining() < ants.turntime * 0.08:
                 logging.info("Had to end turn early due to time limit!")
                 return
+
 
         stats = {}
         stats['MY_ANTS'] = len(ants.my_ants())
@@ -148,6 +128,7 @@ class MyBot:
         stats['ORDERS'] = ["%s: %s" % (k,v) for k, v in orders.iteritems()]
         for stat in stats.keys():
             logging.info(str(stat) + ": " + str(stats[stat]))
+            
         logging.info("-----------")
             
 if __name__ == '__main__':
