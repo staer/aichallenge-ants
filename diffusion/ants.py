@@ -183,40 +183,40 @@ class Ants():
                             owner = int(tokens[3])
                             self.hill_list[(row, col)] = owner
                             
-        self.ant_locations = self.my_ants()
+        
         
         for row in xrange(self.rows):
             for col in xrange(self.cols): 
                 if self.map[row][col] == UNKNOWN and self.visible((row, col)):
                     self.map[row][col] = LAND
             
-        # Update the hill list, we know a hill is destroyed when we have one of our ants standing on top of it!        
-        for ant_loc in self.my_ants():
-            if ant_loc in [(row, col) for ((row, col), owner) in self.enemy_hills()]:
-                logging.info("We are standing on an enemy hill, remove it from memory!")
-                del self.hill_list[ant_loc]
-                
-        # Update our region map with ant count per region
-        #self.region_map = [[0 for col in range(self.region_cols)]
-        #            for row in range(self.region_rows)]
-        
-        for (row, col) in self.my_ants():
+        # Store the ant locations since we will be updating it as the turn progresses
+        self.ant_locations = self.my_ants()        
+        for row, col in self.ant_locations:
+            # Update the region map
             region_row = int(row / 10.0)
             region_col = int(col / 10.0)
-            # We save the turn number last visited for each region
-            self.region_map[region_row][region_col] = self.turn_num 
+            self.region_map[region_row][region_col] = self.turn_num
+            
+            # Update the hill list, we know a hill is destroyed when we have one of our ants standing on top of it!
+            if (row, col) in [(r, c) for ((r, c), owner) in self.enemy_hills()]:
+                del self.hill_list[(row, col)]
+            
         
-        # Print the region map for fun!
-        for row in xrange(self.region_rows):
-            output = ""
-            for col in xrange(self.region_cols):
-                output += str(self.region_map[row][col]).rjust(5)
-            logging.info(output)
+        # This is for debugging the region map only
+        #for row in xrange(self.region_rows):
+        #    output = ""
+        #    for col in xrange(self.region_cols):
+        #        output += str(self.region_map[row][col]).rjust(5)
+        #    logging.info(output)
         
-                    
+      
+    # TODO: This needs to be optimized way way more...              
     def diffuse(self):
         diffusion_count = 0
-        time_left = self.turntime * 0.35
+
+        # Keep 100ms available for ant processing, this is maybe overkill
+        time_left = 100 
         time_remaining = self.time_remaining()
         
         pMap = self.get_fixed_potentials()
@@ -227,7 +227,11 @@ class Ants():
         for row, col in self.my_ants():
             ant_map[row][col] = True
         
-        while time_remaining > time_left:
+        # Store how long the last pass of diffusion took so we can accurately
+        # stop diffusing with some time left over for processing the ants
+        last_pass = 0
+        while time_remaining-last_pass > time_left:
+            pass_start = time.time()
             diffusion_count = diffusion_count + 1
         
             newMap = [[{'FOOD': 0, 'EXPLORE': 0, 'COMBAT': 0, 'ALLIED': 0, 'ENEMY': 0} for col in xrange(self.cols)]
@@ -240,6 +244,9 @@ class Ants():
                     if self.map[row][col] == WATER:
                         newMap[row][col]['FOOD'] = 0
                         newMap[row][col]['EXPLORE'] = 0
+                        newMap[row][col]['COMBAT'] = 0
+                        newMap[row][col]['ALLIED'] = 0
+                        newMap[row][col]['ENEMY'] = 0
                         continue
             
                     surrounding = self.surrounding_squares((row, col))
@@ -253,26 +260,21 @@ class Ants():
                     newMap[row][col]['FOOD'] = max(0.25 * food_total, 0)
                     newMap[row][col]['EXPLORE'] = max(0.25 * explore_total, 0)
                     newMap[row][col]['COMBAT'] = max(0.25 * combat_total, 0)
-                    
-                    #newMap[row][col]['ALLIED'] = int(newMap[row][col]['ALLIED'] + 0.25 * (allied_total - 4*newMap[row][col]['ALLIED']))
-                    #newMap[row][col]['ENEMY'] = int(newMap[row][col]['ENEMY'] + 0.25 * (enemy_total - 4*newMap[row][col]['ENEMY']))
-                    #if newMap[row][col]['ALLIED'] < 1:
-                    #    newMap[row][col]['ALLIED'] = 0
-                    #if newMap[row][col]['ENEMY'] < 1:
-                    #    newMap[row][col]['ENEMY'] = 0
-                    
                     newMap[row][col]['ALLIED'] = int(max(0.25 * allied_total, 0))
                     newMap[row][col]['ENEMY'] = int(max(0.25 * enemy_total, 0))
             
                     if ant_map[row][col]==True:
                         newMap[row][col]['FOOD'] *= 0
                         newMap[row][col]['EXPLORE'] *= 0
-                        # Don't diffuse combat? Then we should surround the target (maybe?)
                         newMap[row][col]['COMBAT'] *= 0
             
             self.potential_map = newMap  
-            self.set_fixed_potentials(pMap)          
+            self.set_fixed_potentials(pMap)  
             
+            # Store how much time it took to run the diffusion pass        
+            pass_end = time.time()
+            last_pass = (pass_end - pass_start) * 1000
+            #logging.info("Last pass took " + str(last_pass) + " milliseconds.")
             time_remaining = self.time_remaining()
         
         # Before exiting give some useful info!
@@ -300,6 +302,13 @@ class Ants():
         # A hill count (our own hills should give an allied boost, we dont' want to run from our own defense!)
         for (row, col) in self.my_hills():
             newMap[row][col]['ALLIED'] = 3000
+            
+            # Defend allied hills
+            # If there are any enmies within x attack units, make sure we have defense!
+            radius = self.attackradius*1.5
+            nEnemies = len(self.enemy_ants_nearby((row, col), radius))
+            if nEnemies > 0:
+                newMap[row][col]['COMBAT'] = DIFFUSION['DEFEND']
 
         # Do enemy ants
         for ((row, col), owner) in self.enemy_ants():
@@ -327,19 +336,19 @@ class Ants():
                         newMap[row][col]['EXPLORE'] = DIFFUSION['UNKNOWN']
                         
         # Check the regions and update the map so we are more likely to travel to regions that dont' have ants    
-        for row in xrange(self.region_rows):
-            for col in xrange(self.region_cols):
-                # Calculate how many turns it has been since we last visited
-                diff = self.turn_num - self.region_map[row][col]
-                if diff > 20:   # If we haven't been there in 20 turns, start making it a place we want to go
-                    #r = random.randint(0, 9) + 10 * row
-                    #c = random.randint(0, 9) + 10 * col
-                    count = 0
-                    for count in xrange(15):
-                        r = random.randint(0, 9) + 10 * row
-                        c = random.randint(0, 9) + 10 * col
-                        if r < self.rows and c < self.cols and self.map[r][c]!=WATER:
-                            pass
+        #for row in xrange(self.region_rows):
+        #    for col in xrange(self.region_cols):
+        #        # Calculate how many turns it has been since we last visited
+        #        diff = self.turn_num - self.region_map[row][col]
+        #        if diff > 20:   # If we haven't been there in 20 turns, start making it a place we want to go
+        #            #r = random.randint(0, 9) + 10 * row
+        #            #c = random.randint(0, 9) + 10 * col
+        #            count = 0
+        #            for count in xrange(15):
+        #                r = random.randint(0, 9) + 10 * row
+        #                c = random.randint(0, 9) + 10 * col
+        #                if r < self.rows and c < self.cols and self.map[r][c]!=WATER:
+        #                    pass
                             #newMap[r][c]['EXPLORE'] = 200#100 * diff
                     #while (r >= self.rows or c >= self.cols) or self.map[r][c]==WATER:
                     #    count+=1    # dont' run more than 100 times
@@ -368,51 +377,11 @@ class Ants():
                 newMap[row][col]['COMBAT'] = DIFFUSION['ENEMY_HILL_VISIBLE']
                 newMap[row][col]['ALLIED'] = 1000   #Make it more likely that we'll attack a hill 
             else:
-                newMap[row][col]['COMBAT'] = DIFFUSION['ENEMY_HILL']
-            
-            #newMap[row][col]['COMBAT'] = DIFFUSION['ENEMY_HILL']
-            continue
-            
-            
-            radius = self.attackradius * 2.0
-            friendRadius = self.attackradius * 3.0
-            nEnemies = len(self.enemy_ants_nearby((row, col), radius))
-            nFriends = len(self.my_ants_nearby((row,col), friendRadius))
-            
-            diff = nEnemies - nFriends
-            if diff >= 2: # RUN AWAY
-                newMap[row][col]['COMBAT'] = 0
-                newMap[row][col]['FOOD'] = 0
-                newMap[row][col]['EXPLORE'] = 0
-                logging.info("Running away from enemy hill at " + str((row, col)))
-                logging.info("Them: " + str(nEnemies) + " vs. Us: " + str(nFriends))
-            elif nFriends==0 and nEnemies==0:
-                newMap[row][col]['COMBAT'] = DIFFUSION['ENEMY_HILL']
-                #newMap[row][col]['EXPLORE'] = DIFFUSION['UNKNOWN']
-                # If we don't have any forces nearby, explore the enemy hill
-                
-                # This is the case that we know nothing about the hill really, but we should have a slight pull towards it always
-                #newMap[row][col]['COMBAT'] = int(0.25 * DIFFUSION['ENEMY_HILL'])
-            else: # ATTACK
-                newMap[row][col]['COMBAT'] = DIFFUSION['ENEMY_HILL']
-                
-                if nEnemies!=0 or nFriends!=0:
-                    logging.info("Attacking enemy hill at " + str((row, col)))
-                    logging.info("Them: " + str(nEnemies) + " vs. Us: " + str(nFriends))    
-                
-        # Defend allied hills
-        # If there are any enmies within x attack units, make sure we have defense!
-        for (row, col) in self.my_hills():
-            radius = self.attackradius*1.5
-            nEnemies = len(self.enemy_ants_nearby((row, col), radius))
-            if nEnemies > 0:
-                logging.info("DEFENDING THE HILL AT: " + str((row,col)))
-                newMap[row][col]['COMBAT'] = DIFFUSION['DEFEND']
+                newMap[row][col]['COMBAT'] = DIFFUSION['ENEMY_HILL']   
         
         # If there are defense positions that don't have ants, put some weight there so we get some.
         for (row, col) in self.defense_locations():
             if (row, col) not in self.my_ants():
-                logging.info("Attracting an ant to defense location " + str((row, col)))
                 newMap[row][col]['FOOD'] = 1000 # Pretend there is a food here to get an ant to come quickly
         
     
@@ -428,13 +397,13 @@ class Ants():
             for (hill_r, hill_c) in self.my_hills():
                 loc_r = hill_r + delta_r
                 loc_c = hill_c + delta_c
-                defense_positions.append((loc_r, loc_c))
-
+                
+                # Make a defense position if it isn't water
+                if loc_r >= 0 and loc_r < self.rows and loc_c >=0 and loc_c < self.cols and self.map[loc_r][loc_c]!=WATER:
+                    defense_positions.append((loc_r, loc_c))
         
         # Take the first "ants" on defense results from the list
         defense_positions = defense_positions[:ants_on_defense]
-        logging.info("Ants on defense: " + str(ants_on_defense))
-        logging.info("Defense locations: " + str(defense_positions))
         return defense_positions
         
 
@@ -573,7 +542,7 @@ class Ants():
         # Don't let anys go somewhere they are goign to get killed?
         diff = self.potential_map[row][col]['ALLIED'] - self.potential_map[row][col]['ENEMY']
         if diff < 350:
-            logging.info("Ant trying to move to " + str((row, col)) + " is being denied because it will get them killed.")
+            #logging.info("Ant trying to move to " + str((row, col)) + " is being denied because it will get them killed.")
             return False
             
         return self.map[row][col] != WATER
@@ -708,9 +677,9 @@ class Ants():
                     ants.finish_turn()
                     map_data = ''
                 elif current_line.lower() == 'go':
-                    ants.update(map_data)
-                    # call the do_turn method of the class passed in
                     try:
+                        ants.update(map_data)
+                    # call the do_turn method of the class passed in
                         bot.do_turn(ants)
                     except:
                         import traceback
