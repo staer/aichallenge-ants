@@ -14,6 +14,8 @@ logging.basicConfig(
                 filename='/tmp/DiffusionBot.log',
                 filemode='w')
 
+ANTS_BEFORE_COMBAT = 20
+
 
 # define a class with a do_turn method
 # the Ants.run method will parse and update bot input
@@ -73,7 +75,7 @@ class MyBot:
 
             if max_combat_val != 0 and max_combat_val > max_food_val and \
                     max_combat_val > max_explore_val and \
-                    len(ants.my_ants()) > len(ants.enemy_ants()):
+                    len(ants.my_ants()) > ANTS_BEFORE_COMBAT:
 
                 orders['combat'] += 1
                 directions = [d for ((r, c), d)
@@ -89,7 +91,8 @@ class MyBot:
                 directions = directions + d2
             elif max_food_val != 0 and \
                     max_food_val >= max_explore_val \
-                    and max_food_val >= max_combat_val:
+                    and (max_food_val >= max_combat_val or \
+                         len(ants.my_ants()) < ANTS_BEFORE_COMBAT):
 
                 orders['food'] += 1
                 directions = [d for ((r, c), d)
