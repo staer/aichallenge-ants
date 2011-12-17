@@ -28,8 +28,8 @@ DIFFUSION = {
     'UNKNOWN': 350,
     'REGION': 300,  # Pull ants to a region that we dont' have many ants in?
     'OWN_HILL': 0,
-    'ENEMY_HILL': 350,  # An enemy hill that we can't see
-    'ENEMY_HILL_VISIBLE': 800,       # An enemy hill in visible range
+    'ENEMY_HILL': 1000,  # An enemy hill that we can't see
+    'ENEMY_HILL_VISIBLE': 1000,       # An enemy hill in visible range
     'HELP_ALLY': 350,                # Help an allied ant with combat
     'ENEMY_ANT': 175,
     'MAX_VALUE': 1000,      # Unused
@@ -41,7 +41,7 @@ DIFFUSION = {
 # How many ants we should have before performing certain actions
 ANTS_BEFORE_DEFENDING = 5
 ANTS_PER_DEFENDER = 5
-ANTS_BEFORE_EXPLORING = 10
+ANTS_BEFORE_EXPLORING = 5
 ANTS_BEFORE_COMBAT = 15
 
 # The value to run an ant away (diff between 1000 ally ant and -1000 enemy ant)
@@ -198,6 +198,12 @@ class Ants():
             for col in xrange(self.cols):
                 if self.map[row][col] == UNKNOWN and self.visible((row, col)):
                     self.map[row][col] = LAND
+
+        # Remove our hills from the game if an enemy ant kills it
+        # So we don't keep defending a lost cause
+        for ((row, col), player) in self.enemy_ants():
+            if (row, col) in self.my_hills():
+                del self.hill_list[(row, col)]
 
         # Store the ant locations since we will be updating it as the
         # turn progresses
