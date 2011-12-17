@@ -39,7 +39,7 @@ DIFFUSION = {
 }
 
 # How many ants we should have before performing certain actions
-ANTS_BEFORE_DEFENDING = 10
+ANTS_BEFORE_DEFENDING = 5
 ANTS_PER_DEFENDER = 5
 ANTS_BEFORE_EXPLORING = 10
 ANTS_BEFORE_COMBAT = 15
