@@ -42,7 +42,7 @@ DIFFUSION = {
 ANTS_BEFORE_DEFENDING = 5
 ANTS_PER_DEFENDER = 5
 ANTS_BEFORE_EXPLORING = 0
-ANTS_BEFORE_COMBAT = 50
+ANTS_BEFORE_COMBAT = 0
 
 # The value to run an ant away (diff between 1000 ally ant and -1000 enemy ant)
 ANT_RUN_AWAY = 250
@@ -247,6 +247,26 @@ class Ants():
                 for row in xrange(self.rows)]
         for row, col in self.my_ants():
             ant_map[row][col] = True
+            
+        food_map = [
+            [False for col in xrange(self.cols)]
+                for row in xrange(self.rows)]
+        for row, col in self.food():
+            food_map[row][col] = True
+            
+        min_row = 10000
+        max_row = 0
+        min_col = 10000
+        max_col = 0
+        for row, col in self.my_ants():
+            if row < min_row:
+                min_row = max(row - 10, 0)
+            if row > max_row:
+                max_row = min(row + 10, self.rows)
+            if col < min_col:
+                min_col = max(col - 10, 0)
+            if col > max_col:
+                max_col = min(col + 10, self.cols)
 
         # Store how long the last pass of diffusion took so we can accurately
         # stop diffusing with some time left over for processing the ants
@@ -263,8 +283,10 @@ class Ants():
                 'ENEMY': 0} for col in xrange(self.cols)]
                 for row in xrange(self.rows)]
 
-            for row in xrange(self.rows):
-                for col in xrange(self.cols):
+            for row in xrange(min_row, max_row):
+                for col in xrange(min_col, max_col):
+            #for row in xrange(self.rows):
+                #for col in xrange(self.cols):
 
                     # We never diffuse water!
                     if self.map[row][col] == WATER:
@@ -306,9 +328,13 @@ class Ants():
                     # < 1 means competition
                     # > 0 means coor
                     if ant_map[row][col] == True:
-                        newMap[row][col]['FOOD'] *= 0
-                        newMap[row][col]['EXPLORE'] *= 0
-                        newMap[row][col]['COMBAT'] *= 0
+                        newMap[row][col]['FOOD'] = 0
+                        newMap[row][col]['EXPLORE'] = 0
+                        newMap[row][col]['COMBAT'] = 0
+                        newMap[row][col]['ENEMY'] = 0
+                    if food_map[row][col] == True:
+                        newMap[row][col]['EXPLORE'] = 0
+                        newMap[row][col]['COMBAT'] = 0
 
             self.potential_map = newMap
             self.set_fixed_potentials(pMap)
@@ -364,18 +390,18 @@ class Ants():
                 newMap[row][col]['COMBAT'] = DIFFUSION['DEFEND']
 
         # Do enemy ants
-        for ((row, col), owner) in self.enemy_ants():
-            newMap[row][col]['ENEMY'] = 1000
-
-            if ant_count > ANTS_BEFORE_COMBAT:
-                # We can set the combat potential based on how "vulnerable"
-                # the target is?
-                diff = self.potential_map[row][col]['ALLIED'] - \
-                       self.potential_map[row][col]['ENEMY']
-                # The diff will be between -1000 and 1000, -1000 being
-                # strong enemy position.
-                newMap[row][col]['COMBAT'] = (1000 + diff)
-
+        # for ((row, col), owner) in self.enemy_ants():
+        #             newMap[row][col]['ENEMY'] = 1000
+        # 
+        #             if ant_count > ANTS_BEFORE_COMBAT:
+        #                 # We can set the combat potential based on how "vulnerable"
+        #                 # the target is?
+        #                 diff = self.potential_map[row][col]['ALLIED'] - \
+        #                        self.potential_map[row][col]['ENEMY']
+        #                 # The diff will be between -1000 and 1000, -1000 being
+        #                 # strong enemy position.
+        #                 newMap[row][col]['COMBAT'] = (1000 + diff)
+        
         # Fill in the food potential map
         food = self.food()
         for row, col in food:
