@@ -48,7 +48,7 @@ class MyBot:
             'random': 0,
             'combat': 0,
         }
-
+        total_food = len(ants.food())
         defense_locations = ants.defense_locations()
 
         for ant_loc in ants.my_ants():
@@ -92,7 +92,8 @@ class MyBot:
             elif max_food_val != 0 and \
                     max_food_val >= max_explore_val \
                     and (max_food_val >= max_combat_val or \
-                         len(ants.my_ants()) < ANTS_BEFORE_COMBAT):
+                         len(ants.my_ants()) < ANTS_BEFORE_COMBAT) and \
+                         total_food != 0:
 
                 orders['food'] += 1
                 directions = [d for ((r, c), d)
