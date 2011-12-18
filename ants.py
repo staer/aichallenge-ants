@@ -254,6 +254,8 @@ class Ants():
         for row, col in self.food():
             food_map[row][col] = True
             
+        # Figure out a smaller area to diffuse over, we should diffuse over
+        # our ants, as well as any known hills.
         min_row = 10000
         max_row = 0
         min_col = 10000
@@ -267,6 +269,16 @@ class Ants():
                 min_col = max(col - 10, 0)
             if col > max_col:
                 max_col = min(col + 10, self.cols)
+        for (row, col) in self.hill_list:
+            if row < min_row:
+                min_row = max(row - 10, 0)
+            if row > max_row:
+                max_row = min(row + 10, self.rows)
+            if col < min_col:
+                min_col = max(col - 10, 0)
+            if col > max_col:
+                max_col = min(col + 10, self.cols)
+
 
         # Store how long the last pass of diffusion took so we can accurately
         # stop diffusing with some time left over for processing the ants
@@ -330,8 +342,9 @@ class Ants():
                     if ant_map[row][col] == True:
                         newMap[row][col]['FOOD'] = 0
                         newMap[row][col]['EXPLORE'] = 0
-                        newMap[row][col]['COMBAT'] = 0
+                        #newMap[row][col]['COMBAT'] *= 2
                         newMap[row][col]['ENEMY'] = 0
+                    
                     if food_map[row][col] == True:
                         newMap[row][col]['EXPLORE'] = 0
                         newMap[row][col]['COMBAT'] = 0
@@ -370,11 +383,11 @@ class Ants():
             newMap[row][col]['ALLIED'] = 1000
 
             # TODO: Call for allied help?
-            if ant_count > ANTS_BEFORE_COMBAT:
-                diff = self.potential_map[row][col]['ALLIED'] - \
-                       self.potential_map[row][col]['ENEMY']
-                if diff < ANT_RUN_AWAY * 1.5:
-                    newMap[row][col]['COMBAT'] = DIFFUSION['HELP_ALLY']
+            # if ant_count > ANTS_BEFORE_COMBAT:
+            #     diff = self.potential_map[row][col]['ALLIED'] - \
+            #            self.potential_map[row][col]['ENEMY']
+            #     if diff < ANT_RUN_AWAY * 1.5:
+            #         newMap[row][col]['COMBAT'] = DIFFUSION['HELP_ALLY']
 
         # A hill count (our own hills should give an allied boost,
         # we dont' want to run from our own defense!)
@@ -390,17 +403,16 @@ class Ants():
                 newMap[row][col]['COMBAT'] = DIFFUSION['DEFEND']
 
         # Do enemy ants
-        # for ((row, col), owner) in self.enemy_ants():
-        #             newMap[row][col]['ENEMY'] = 1000
-        # 
-        #             if ant_count > ANTS_BEFORE_COMBAT:
-        #                 # We can set the combat potential based on how "vulnerable"
-        #                 # the target is?
-        #                 diff = self.potential_map[row][col]['ALLIED'] - \
-        #                        self.potential_map[row][col]['ENEMY']
-        #                 # The diff will be between -1000 and 1000, -1000 being
-        #                 # strong enemy position.
-        #                 newMap[row][col]['COMBAT'] = (1000 + diff)
+        for ((row, col), owner) in self.enemy_ants():
+            newMap[row][col]['ENEMY'] = 1000
+            if ant_count > ANTS_BEFORE_COMBAT:
+                # We can set the combat potential based on how "vulnerable"
+                # the target is?
+                diff = self.potential_map[row][col]['ALLIED'] - \
+                       self.potential_map[row][col]['ENEMY']
+                # The diff will be between -1000 and 1000, -1000 being
+                # strong enemy position.
+                newMap[row][col]['COMBAT'] = (1000 + diff)
         
         # Fill in the food potential map
         food = self.food()
@@ -432,6 +444,8 @@ class Ants():
                 newMap[row][col]['ALLIED'] = 1000
             else:
                 newMap[row][col]['COMBAT'] = DIFFUSION['ENEMY_HILL']
+            if len(self.my_ants()) > 30:
+                newMap[row][col]['COMBAT'] *= 2
 
         # If there are defense positions that don't have ants, put some
         # weight there so we get some.
