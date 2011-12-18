@@ -28,8 +28,8 @@ DIFFUSION = {
     'UNKNOWN': 350,
     'REGION': 300,  # Pull ants to a region that we dont' have many ants in?
     'OWN_HILL': 0,
-    'ENEMY_HILL': 1000,  # An enemy hill that we can't see
-    'ENEMY_HILL_VISIBLE': 1000,       # An enemy hill in visible range
+    'ENEMY_HILL': 800,  # An enemy hill that we can't see
+    'ENEMY_HILL_VISIBLE': 800,       # An enemy hill in visible range
     'HELP_ALLY': 350,                # Help an allied ant with combat
     'ENEMY_ANT': 175,
     'MAX_VALUE': 1000,      # Unused
@@ -41,8 +41,8 @@ DIFFUSION = {
 # How many ants we should have before performing certain actions
 ANTS_BEFORE_DEFENDING = 5
 ANTS_PER_DEFENDER = 5
-ANTS_BEFORE_EXPLORING = 5
-ANTS_BEFORE_COMBAT = 15
+ANTS_BEFORE_EXPLORING = 0
+ANTS_BEFORE_COMBAT = 50
 
 # The value to run an ant away (diff between 1000 ally ant and -1000 enemy ant)
 ANT_RUN_AWAY = 250
@@ -290,11 +290,19 @@ class Ants():
 
                     newMap[row][col]['FOOD'] = max(0.25 * food_total, 0)
                     newMap[row][col]['EXPLORE'] = max(0.25 * explore_total, 0)
-                    newMap[row][col]['COMBAT'] = max(0.25 * combat_total, 0)
+
+                    # If we don't have the correct number of ants, don't even
+                    # diffuse combat, we shouldn't follow this path until we
+                    # are strong enough
+                    if len(self.my_ants()) >= ANTS_BEFORE_COMBAT:
+                        newMap[row][col]['COMBAT'] = max(0.25 * combat_total, 0)
+                    else:
+                        newMap[row][col]['COMBAT'] = 0
+
                     newMap[row][col]['ALLIED'] = max(0.25 * allied_total, 0)
                     newMap[row][col]['ENEMY'] = max(0.25 * enemy_total, 0)
 
-                    # This is the lambda value in the diffusion equestion
+                    # This is the lambda value in the diffusion equation
                     # < 1 means competition
                     # > 0 means coor
                     if ant_map[row][col] == True:
