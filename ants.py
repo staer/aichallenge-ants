@@ -247,7 +247,7 @@ class Ants():
                 for row in xrange(self.rows)]
         for row, col in self.my_ants():
             ant_map[row][col] = True
-            
+
         food_map = [
             [False for col in xrange(self.cols)]
                 for row in xrange(self.rows)]
@@ -301,7 +301,8 @@ class Ants():
                     # diffuse combat, we shouldn't follow this path until we
                     # are strong enough
                     if len(self.my_ants()) >= ANTS_BEFORE_COMBAT:
-                        newMap[row][col]['COMBAT'] = max(0.25 * combat_total, 0)
+                        newMap[row][col]['COMBAT'] = max(0.25 * \
+                                                         combat_total, 0)
                     else:
                         newMap[row][col]['COMBAT'] = 0
 
@@ -316,7 +317,7 @@ class Ants():
                         newMap[row][col]['EXPLORE'] = 0
                         #newMap[row][col]['COMBAT'] *= 2
                         newMap[row][col]['ENEMY'] = 0
-                    
+
                     if food_map[row][col] == True:
                         newMap[row][col]['EXPLORE'] = 0
                         newMap[row][col]['COMBAT'] = 0
@@ -385,7 +386,7 @@ class Ants():
                 # The diff will be between -1000 and 1000, -1000 being
                 # strong enemy position.
                 newMap[row][col]['COMBAT'] = (1000 + diff)
-        
+
         # Fill in the food potential map
         food = self.food()
         for row, col in food:
