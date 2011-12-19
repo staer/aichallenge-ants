@@ -253,32 +253,6 @@ class Ants():
                 for row in xrange(self.rows)]
         for row, col in self.food():
             food_map[row][col] = True
-            
-        # Figure out a smaller area to diffuse over, we should diffuse over
-        # our ants, as well as any known hills.
-        min_row = 10000
-        max_row = 0
-        min_col = 10000
-        max_col = 0
-        for row, col in self.my_ants():
-            if row < min_row:
-                min_row = max(row - 10, 0)
-            if row > max_row:
-                max_row = min(row + 10, self.rows)
-            if col < min_col:
-                min_col = max(col - 10, 0)
-            if col > max_col:
-                max_col = min(col + 10, self.cols)
-        for (row, col) in self.hill_list:
-            if row < min_row:
-                min_row = max(row - 10, 0)
-            if row > max_row:
-                max_row = min(row + 10, self.rows)
-            if col < min_col:
-                min_col = max(col - 10, 0)
-            if col > max_col:
-                max_col = min(col + 10, self.cols)
-
 
         # Store how long the last pass of diffusion took so we can accurately
         # stop diffusing with some time left over for processing the ants
@@ -295,10 +269,8 @@ class Ants():
                 'ENEMY': 0} for col in xrange(self.cols)]
                 for row in xrange(self.rows)]
 
-            for row in xrange(min_row, max_row):
-                for col in xrange(min_col, max_col):
-            #for row in xrange(self.rows):
-                #for col in xrange(self.cols):
+            for row in xrange(self.rows):
+                for col in xrange(self.cols):
 
                     # We never diffuse water!
                     if self.map[row][col] == WATER:
